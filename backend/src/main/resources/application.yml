@@ -1,0 +1,41 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: charte-backend
+  profiles:
+    default: dev
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${SUPABASE_URL:https://djvktcghevdtpdqdtcmx.supabase.co}/auth/v1
+  datasource:
+    url: ${SUPABASE_JDBC_URL:jdbc:postgresql://127.0.0.1:5432/postgres}
+    username: ${SUPABASE_DB_USER:}
+    password: ${SUPABASE_DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      initialization-fail-timeout: -1
+      connection-timeout: 5000
+      maximum-pool-size: 5
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+charte:
+  cors:
+    allowed-origin: ${CHARTE_CORS_ALLOWED_ORIGIN:http://localhost:4200}
+  payment:
+    provider: ${PAYMENT_PROVIDER:mock}
+    dev:
+      checkout-base-url: ${MOCK_CHECKOUT_BASE_URL:http://localhost:8080/}
+      simulation-token: ${MOCK_PAYMENT_SIMULATION_TOKEN:}
+      simulation-enabled: ${MOCK_PAYMENT_SIMULATION_ENABLED:false}

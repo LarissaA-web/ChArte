@@ -1,0 +1,33 @@
+<app-search-bar [showSearchCard]="true"></app-search-bar>
+
+<app-swipeables-cards></app-swipeables-cards>
+
+<!--
+@for (post of posts; track post.id) {
+  <app-pin-card [post]="post"></app-pin-card>
+
+  @for (post of artes; track post.id) {
+
+  <app-pin-card
+    [post]="post"
+    (abrirModal)="abrirPinModal($event)">
+  </app-pin-card>
+
+}
+
+<app-pin-card-modal
+  [post]="postSelecionado">
+</app-pin-card-modal>
+}
+-->
+
+
+<div class="pin_container">
+  @for (arte of artes; track arte.id) {
+    <app-pin-card [post]="arte"></app-pin-card>
+  }
+</div>
+
+<app-artist-login-modal></app-artist-login-modal>
+<app-sub-menu></app-sub-menu>
+<app-pin-card-modal> </app-pin-card-modal>

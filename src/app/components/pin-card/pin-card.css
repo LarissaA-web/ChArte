@@ -1,0 +1,125 @@
+.circle-sm {
+  width: 65px !important;
+  height: 65px !important;
+  min-width: 65px !important;
+  min-height: 65px !important;
+  max-width: 65px !important;
+  max-height: 65px !important;
+  border: 1px solid #7040c6;
+  display: block !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 5px !important;
+}
+
+.circle-sm img {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
+  object-fit: cover;
+}
+
+@media (max-width: 680px) {
+  .circle-sm {
+    width: 52px !important;
+    height: 52px !important;
+    min-width: 52px !important;
+    min-height: 52px !important;
+    max-width: 52px !important;
+    max-height: 52px !important;
+  }
+}
+
+.pin-card {
+  position: relative;
+}
+
+.pin-card .btnFav {
+  position: absolute;
+  z-index: 2;
+  /* The shared card stylesheet adds 10px of top padding before the image. */
+  top: 10px;
+  right: 20px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 46px;
+  margin: 0;
+  padding: 0 0 4px;
+  border-radius: 0 0 5px 5px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+  background: rgba(24, 18, 29, 0.78);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.pin-card .btnFav:hover {
+  transform: translateY(2px);
+  background: rgba(255, 255, 255, 0.94);
+  color: #8b42ad;
+}
+.pin-card .btnFav.saved {
+  color: #fff;
+  background: rgba(151, 65, 190, 0.94);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+.pin-card .btnFav.saved:hover {
+  background: #7f329f;
+}
+.pin-card .bookmark-icon {
+  display: block;
+  width: 19px;
+  height: 22px;
+  fill: currentColor;
+}
+.pin-card .btnFav:not(.saved) .bookmark-icon path {
+  fill: transparent;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pin-card > img.pin-image {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+.pin-card.apenas-imagem {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: 16px;
+}
+
+.pin-card.apenas-imagem > img {
+  display: block;
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+  border-radius: 16px;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.pin-card.apenas-imagem:hover > img {
+  transform: scale(1.025);
+  box-shadow: 0 10px 24px rgba(112, 64, 198, 0.35);
+}
+
+@media (max-width: 680px) {
+  .pin-card.apenas-imagem > img {
+    height: 200px;
+  }
+}

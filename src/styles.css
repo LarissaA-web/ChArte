@@ -1,0 +1,256 @@
+@import "./styles/artist-area-base.css";
+@import "./styles/artist-area-layout.css";
+/* You can add global styles to this file, and also import other style files */
+@import './styles/var.css';
+@import './styles/button.css';
+@import './styles/card.css';
+@import './styles/loading-gallery.css';
+@import './styles/form.css';
+@import './styles/modal.css';
+@import './styles/container.css';
+@import './styles/input.css';
+@import './styles/bgModal.css';
+@import './styles/fonts.css';
+@import './styles/root.css';
+@import './styles/Mobile/hideOnMobile.css';
+@import './styles/profile.css';
+@import './styles/Mobile/modal.css';
+@import './styles/closeButton.css';
+
+/* Os pins do perfil devem respeitar a largura disponível ao lado da sidebar. */
+.perfil-main-content .pin_container {
+  position: relative;
+  width: calc(100% - 30px);
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 15px;
+  columns: 5 320px;
+}
+
+@media (max-width: 785px) {
+  .perfil-main-content .pin_container { columns: 2 auto; }
+}
+
+html[data-theme='claro'] body {
+  color: var(--text-bg);
+  background-color: var(--background);
+}
+
+html[data-theme='claro'] .home-menu {
+  color: #241b2b;
+  background: linear-gradient(160deg, #fff, #f0eaf4);
+  box-shadow: -8px 8px 30px rgba(42, 25, 52, 0.2);
+}
+
+html[data-theme='claro'] .home-menu main button {
+  color: #382b40;
+  background: rgba(55, 35, 70, 0.06);
+}
+
+html[data-theme='claro'] .home-menu main button:hover,
+html[data-theme='claro'] .lightOrDark button:hover {
+  color: #241b2b;
+  background: rgba(155, 36, 232, 0.13);
+}
+
+html[data-theme='claro'] .user-name {
+  color: #241b2b;
+}
+
+html[data-theme='claro'] .user-handle {
+  color: rgba(36, 27, 43, 0.62);
+}
+
+html[data-theme='claro'] .lightOrDark button {
+  color: #382b40;
+  border-color: rgba(55, 35, 70, 0.15);
+  background: rgba(55, 35, 70, 0.06);
+}
+
+html[data-theme='claro'] .lightOrDark button.active {
+  border-color: #9b24e8;
+  background: rgba(155, 36, 232, 0.16);
+}
+
+/* Tema claro para superfícies e conteúdo dos componentes da aplicação. */
+html[data-theme='claro'] app-root,
+html[data-theme='claro'] app-root main,
+html[data-theme='claro'] app-root section,
+html[data-theme='claro'] app-root article,
+html[data-theme='claro'] app-root aside,
+html[data-theme='claro'] app-root form,
+html[data-theme='claro'] app-root [class*='-page'],
+html[data-theme='claro'] app-root [class*='-card'],
+html[data-theme='claro'] app-root [class*='-panel'],
+html[data-theme='claro'] app-root [class*='-modal'],
+html[data-theme='claro'] app-root [class*='-container'] {
+  color: #30243a;
+  background-color: #fff;
+  border-color: #e5dce9;
+}
+
+html[data-theme='claro'] app-root :is(
+  .signup-page, .signup-panel, .signup-segment, .signup-field input,
+  .catalog-page, .catalog-heading, .catalog-empty,
+  .orders-page, .orders-tabs, .orders-empty, .favorite-item, .order-card,
+  .artist-profile, .profile-page, .profile-content, .profile-card,
+  .dashboard, .metric-card, .chart-card, .status-card,
+  .commission-modal, .commission-modal-grid > div, .payment-warning,
+  .container-edit-profile, .modal-post, .modal-content,
+  .user-login-modal, .artist-login-modal, .edit-profile-modal,
+  .post-modal, .pin-card-modal, .chat-page, .chat-panel, .chat-header,
+  .chat-list, .chat-conversation, .chat-container, .sloganCard,
+  .card, .pin-card, .pacote-card, .termo-card, .perfil-menu,
+  .colecao, .portfolio, .dashboard-card, .commission-card
+) {
+  color: #30243a;
+  background-color: #fff;
+  border-color: #e5dce9;
+}
+
+html[data-theme='claro'] app-root :is(
+  .modal-overlay, .chat-overlay, .commission-modal-backdrop
+) {
+  background-color: rgba(46, 30, 55, 0.35);
+}
+
+html[data-theme='claro'] app-root :is(
+  h1, h2, h3, h4, p, label, small, strong, span, li, dt, dd,
+  .signup-header p, .signup-label, .signup-hint, .signup-footer,
+  .catalog-heading p, .catalog-empty, .orders-heading p, .orders-tabs button,
+  .orders-empty, .order-main p, .order-main p strong, .dashboard-heading p,
+  .metric-label, .chart-empty, .commission-description,
+  .commission-modal-grid span, .artist-chip, .period-chip
+) {
+  color: #493b52;
+}
+
+html[data-theme='claro'] app-root :is(input, textarea, select) {
+  color: #30243a;
+  background-color: #fff;
+  border-color: #d9ccdf;
+  color-scheme: light;
+}
+
+html[data-theme='claro'] app-root :is(button, a, p, span, label, small, strong, b, i, li, h1, h2, h3, h4, h5, h6, legend, dt, dd) {
+  color: #493b52 !important;
+}
+
+html[data-theme='claro'] app-root button {
+  background-color: #eee8f1 !important;
+  border-color: #d9ccdf !important;
+}
+
+html[data-theme='claro'] app-root :is(
+  .signup-submit, .signup-segment button.active, .primary-button,
+  .primary-action, .btn-primary, .btn-solicitar, .profile-action,
+  .btn-chat, .btnFav.saved, .payment-status, .order-status,
+  .status-success, .status-error, .lightOrDark button.active,
+  [class*='primary-action']
+) {
+  color: #fff !important;
+  background-color: #8b24c4 !important;
+  border-color: #8b24c4 !important;
+}
+
+html[data-theme='claro'] app-root button:hover {
+  background-color: #e2d6e9 !important;
+}
+
+html[data-theme='claro'] app-root :is(
+  .signup-submit, .signup-segment button.active, .primary-button,
+  .primary-action, .btn-primary, .btn-solicitar, .profile-action, .btn-chat,
+  .lightOrDark button.active
+):hover {
+  background-color: #7620a8 !important;
+}
+
+html[data-theme='claro'] app-root input::placeholder,
+html[data-theme='claro'] app-root textarea::placeholder {
+  color: #817489;
+}
+
+html[data-theme='claro'] app-root :is(
+  .signup-segment button, .orders-tabs button, .secondary-button,
+  .secondary-action, .remove-favorite, .closeButton, .chat-window button
+) {
+  color: #493b52;
+  background-color: #eee8f1;
+  border-color: #d9ccdf;
+}
+
+html[data-theme='claro'] #artist-area-root {
+  color: #30243a;
+  background: #f5f2f8;
+  border-color: #e5dce9;
+}
+
+html[data-theme='claro'] #artist-area-root :is(
+  .artist-sidebar, .artist-main, .mobile-menu, .offer-card, .guideline-card,
+  .chart-card, .delivery-dialog, .proposal-card, .profile-preview
+) {
+  color: #30243a;
+  background: #fff;
+  border-color: #e5dce9;
+}
+
+html[data-theme='claro'] #artist-area-root :is(
+  .brand, .nav-group h2, .nav-group button, .logout, .area-heading p,
+  .section-heading p, .dashboard-heading p, .proposal-actions label,
+  .username-form label, .editor-form label, .delivery-dialog label,
+  .file-row, .offer-card ul, .guideline-card p
+) {
+  color: #493b52;
+}
+
+.password-field-control {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.password-field-control input {
+  padding-right: 52px !important;
+  display: block;
+  margin: 0 !important;
+}
+
+.password-field-control .password-visibility {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 10px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  box-sizing: border-box;
+  margin-block: auto;
+  place-items: center;
+  padding: 0;
+  color: rgba(255,255,255,.68);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+}
+
+.password-field-control .password-visibility:hover,
+.password-field-control .password-visibility:focus-visible {
+  color: #fff;
+  background: rgba(255,255,255,.1);
+}
+
+.password-visibility svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.password-visibility .eye-slash {
+  stroke: #d7b1f4;
+  stroke-width: 2.2;
+}

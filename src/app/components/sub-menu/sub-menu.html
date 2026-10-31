@@ -1,0 +1,41 @@
+@if ((modal.modalOpen$ | async) === 'subMenu') {
+  <div class="modal-overlay" (click)="modal.closeModal()">
+    <div class="home-menu" (click)="$event.stopPropagation()">
+      @if (auth.usuarioLogado$ | async; as usuario) {
+        <div class="user-header">
+          <img
+            class="user-avatar-sm"
+            [src]="usuario.fotoPerfil || 'assets/imagens/perfil.jpg'"
+            [alt]="usuario.nome"
+          />
+          <div class="user-info">
+            <strong class="user-name">{{ usuario.nomeArtistico || usuario.nome }}</strong>
+            <span class="user-handle">@{{ usuario.nomeUsuario }}</span>
+          </div>
+        </div>
+      }
+
+      <main>
+        @if (auth.usuarioLogado$ | async) {
+          <button (click)="irParaMeuPerfil()">Meu Perfil</button>
+        } @else {
+          <button (click)="abrirLogin()">Logar</button>
+          <button (click)="modal.openModal('artistLogin')">Sou artista</button>
+        }
+        <button (click)="irParaCarrinho()">Favoritos</button>
+        <button (click)="irParaChat()">Chat</button>
+        <button>ajuda</button>
+        @if (auth.usuarioLogado$ | async) {
+          <button class="btn-logout" (click)="logout()">Logout</button>
+        }
+      </main>
+
+      <footer>
+        <div class="lightOrDark">
+          <button type="button" aria-label="Tema claro" [attr.aria-pressed]="tema === 'claro'" [class.active]="tema === 'claro'" (click)="definirTema('claro')">☀️</button>
+          <button type="button" aria-label="Tema escuro" [attr.aria-pressed]="tema === 'escuro'" [class.active]="tema === 'escuro'" (click)="definirTema('escuro')">🌒</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+}

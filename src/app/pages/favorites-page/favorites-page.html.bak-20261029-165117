@@ -1,0 +1,70 @@
+<app-search-bar></app-search-bar>
+<app-artist-login-modal></app-artist-login-modal>
+<app-sub-menu></app-sub-menu>
+<app-pin-card-modal></app-pin-card-modal>
+
+<main class="orders-page">
+  <header class="orders-heading"></header>
+  <nav class="orders-tabs" aria-label="Favoritos e pedidos">
+    <button type="button" [class.active]="aba === 'favoritos'" (click)="selecionarAba('favoritos')">
+      Favoritos <span>{{ (artesFavoritas$ | async)?.length ?? 0 }}</span>
+    </button>
+    <button type="button" [class.active]="aba === 'pedidos'" (click)="selecionarAba('pedidos')">
+      Pedidos <span>{{ pedidos.length }}</span>
+    </button>
+  </nav>
+  @if (aba === 'favoritos') {
+    <section class="pin_container favorites-grid">
+      @for (arte of artesFavoritas$ | async; track arte.id) {
+        <app-pin-card [post]="arte" (click)="abrirPin(arte)"></app-pin-card>
+      } @empty {
+        <div class="orders-empty">
+          <div class="empty-icon">♡</div>
+          <h2>Nenhum favorito salvo</h2>
+          <p>Use “Favoritar” nas artes para guardá-las aqui.</p>
+          <a routerLink="/">Explorar artistas</a>
+        </div>
+      }
+    </section>
+  } @else {
+    <section class="orders-list">
+      @if (!username) {
+        <div class="orders-empty">
+          <h2>Entre na sua conta</h2>
+          <p>Faça login para acompanhar seus pedidos.</p>
+        </div>
+      }
+      @for (pedido of pedidos; track pedido.id) {
+        <a class="order-card" [routerLink]="['/pedido', pedido.id]">
+          <div class="order-art">✦</div>
+          <div class="order-main">
+            <span class="order-overline"
+              >PEDIDO #{{ pedido.id }} · {{ pedido.criadaEm | date: 'dd/MM/yyyy' }}</span
+            >
+            <h2>{{ pedido.titulo }}</h2>
+            <p>
+              Artista <strong>@{{ pedido.artistaUsername }}</strong> ·
+              {{ pedido.opcaoTitulo || 'Comissão personalizada' }}
+            </p>
+          </div>
+          <div class="order-info">
+            <strong>{{ pedido.valor | currency: 'BRL' }}</strong
+            ><span class="order-status" [class]="statusClasse(statusPedido(pedido))">{{
+              statusPedido(pedido)
+            }}</span>
+          </div>
+          <span class="order-arrow">›</span>
+        </a>
+      } @empty {
+        @if (username) {
+          <div class="orders-empty">
+            <div class="empty-icon">✦</div>
+            <h2>Nenhum pedido por aqui</h2>
+            <p>Quando você solicitar um orçamento, ele aparecerá nesta lista.</p>
+            <a routerLink="/">Encontrar um artista</a>
+          </div>
+        }
+      }
+    </section>
+  }
+</main>

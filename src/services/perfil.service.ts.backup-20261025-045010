@@ -1,0 +1,216 @@
+import { Injectable } from '@angular/core';
+import { Observable, from, of } from 'rxjs';
+import { PerfilView } from '../app/models/perfil';
+import { supabase } from '../app/core/supabase/supabase.client';
+import { map, catchError } from 'rxjs/operators';
+
+@Injectable({ providedIn: 'root' })
+export class PerfilService {
+
+  getPerfil(nomeUsuario: string): Observable<PerfilView | null> {
+    const nome = nomeUsuario.trim().toLowerCase();
+    return from(this.buscarPerfilNoBanco(nome)).pipe(
+      catchError(() => of(null))
+    );
+  }
+
+  private async buscarPerfilNoBanco(nomeUsuario: string): Promise<PerfilView | null> {
+    const { data: usuario, error } = await supabase
+      .from('usuario')
+      .select(`
+        id_usuario,
+        nome_usuario,
+        nome,
+        foto_perfil,
+        banner_perfil,
+        bio,
+        tipo_usuario
+      `)
+      .ilike('nome_usuario', nomeUsuario)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Erro ao buscar perfil do usuário:', error);
+      return null;
+    }
+
+    if (!usuario) {
+      console.warn('Usuário não encontrado:', nomeUsuario);
+      return null;
+    }
+
+    const ehArtista =
+      String(usuario.tipo_usuario).toLowerCase() === 'artista';
+
+    let artistaData: {
+      id_artista: number;
+      nome_artistico: string;
+      data_inicio: string;
+    } | null = null;
+
+    if (ehArtista) {
+      const { data: artista, error: erroArtista } = await supabase
+        .from('artista')
+        .select('id_artista, nome_artistico, data_inicio')
+        .eq('id_usuario', usuario.id_usuario)
+        .maybeSingle();
+
+      if (erroArtista) {
+        console.error('Erro ao buscar dados do artista:', erroArtista);
+      }
+
+      artistaData = artista;
+    }
+
+    const { data: redes, error: erroRedes } = await supabase
+      .from('redes_sociais')
+      .select('twitter, instagram, tiktok, youtube')
+      .eq('id_usuario', usuario.id_usuario)
+      .maybeSingle();
+
+    if (erroRedes) {
+      console.error('Erro ao buscar redes sociais:', erroRedes);
+    }
+
+    const redesSociais = redes ?? {};
+
+    return {
+      idUsuario: String(usuario.id_usuario),
+      nomeUsuario: usuario.nome_usuario,
+      nome: usuario.nome,
+      nomeArtistico: artistaData?.nome_artistico,
+      fotoPerfil: usuario.foto_perfil || '/gato.jpeg',
+      banner: usuario.banner_perfil || '/nimona.jpeg',
+      bio: usuario.bio || '',
+      tipoUsuario: ehArtista ? 'Artista' :
+        (String(usuario.tipo_usuario).toLowerCase() === 'cliente'
+          ? 'Comum'
+          : usuario.tipo_usuario),
+      seguidores: 0,
+      seguindo: 0,
+      avaliacaoMedia: 0,
+      totalReviews: 0,
+      idArtista: artistaData?.id_artista,
+      redesSociais: redesSociais || {},
+    };
+  }
+
+  async atualizarPerfil(nomeUsuario: string, dadosAtualizados: Partial<PerfilView>): Promise<boolean> {
+    const nome = nomeUsuario.trim().toLowerCase();
+
+    const usuarioUpdates: Record<string, unknown> = {};
+    if (dadosAtualizados.nome !== undefined) usuarioUpdates['nome'] = dadosAtualizados.nome;
+    if (dadosAtualizados.fotoPerfil !== undefined) usuarioUpdates['foto_perfil'] = dadosAtualizados.fotoPerfil;
+    if (dadosAtualizados.banner !== undefined) usuarioUpdates['banner_perfil'] = dadosAtualizados.banner;
+    if (dadosAtualizados.bio !== undefined) usuarioUpdates['bio'] = dadosAtualizados.bio;
+
+    let sucesso = true;
+
+    if (Object.keys(usuarioUpdates).length > 0) {
+      const { data, error } = await supabase
+        .from('usuario')
+        .update(usuarioUpdates)
+        .ilike('nome_usuario', nome)
+        .select('id_usuario');
+
+      if (error) {
+        console.error('Erro ao atualizar usuário:', error);
+        sucesso = false;
+      } else if (!data || data.length === 0) {
+        console.error(
+          'Nenhum usuário foi atualizado. Verifique o nome de usuário e as políticas RLS.',
+          { nome }
+        );
+        sucesso = false;
+      }
+    }
+
+    if (dadosAtualizados.nomeArtistico !== undefined) {
+      const { data: usuario, error: erroUsuario } = await supabase
+        .from('usuario')
+        .select('id_usuario, tipo_usuario')
+        .ilike('nome_usuario', nome)
+        .maybeSingle();
+
+      if (erroUsuario) {
+        console.error('Erro ao localizar usuário para atualizar artista:', erroUsuario);
+        sucesso = false;
+      } else if (
+        usuario &&
+        String(usuario.tipo_usuario).toLowerCase() === 'artista'
+      ) {
+        const { error } = await supabase
+          .from('artista')
+          .update({
+            nome_artistico: dadosAtualizados.nomeArtistico
+          })
+          .eq('id_usuario', usuario.id_usuario);
+
+        if (error) {
+          console.error('Erro ao atualizar nome artístico:', error);
+          sucesso = false;
+        }
+      }
+    }
+
+    if (dadosAtualizados.redesSociais) {
+      const { data: usuario } = await supabase
+        .from('usuario')
+        .select('id_usuario')
+        .ilike('nome_usuario', nome)
+        .single();
+
+      if (usuario) {
+        const { error } = await supabase
+          .from('redes_sociais')
+          .upsert({
+            id_usuario: usuario.id_usuario,
+            twitter: dadosAtualizados.redesSociais.twitter,
+            instagram: dadosAtualizados.redesSociais.instagram,
+            tiktok: dadosAtualizados.redesSociais.tiktok,
+            youtube: dadosAtualizados.redesSociais.youtube,
+          });
+        if (error) {
+          console.error('Erro ao atualizar redes sociais:', error);
+          sucesso = false;
+        }
+      }
+    }
+
+    return sucesso;
+  }
+
+  async nomeUsuarioDisponivel(nomeUsuario: string, atual = ''): Promise<boolean> {
+    const nome = nomeUsuario.trim().replace(/^@/, '').toLowerCase();
+    const atualLower = atual.trim().replace(/^@/, '').toLowerCase();
+
+    if (nome === atualLower) return true;
+
+    const { data, error } = await supabase
+      .from('usuario')
+      .select('nome_usuario')
+      .ilike('nome_usuario', nome)
+      .limit(1);
+
+    if (error) return false;
+    return !data || data.length === 0;
+  }
+
+  async criarPerfil(dados: {
+    idUsuario: string;
+    nomeUsuario: string;
+    nome: string;
+    nomeArtistico?: string;
+    email: string;
+    tipoUsuario: 'Comum' | 'Artista';
+  }): Promise<PerfilView | null> {
+    // O trigger do banco já cria o perfil no cadastro
+    // Este método mantém compatibilidade mas retorna o perfil criado
+    return this.buscarPerfilNoBanco(dados.nomeUsuario);
+  }
+
+  async removerPerfil(idUsuario: string): Promise<void> {
+    // Não remove do banco (exclusão real precisa de Edge Function)
+    // Apenas para compatibilidade
+  }
+}

@@ -1,0 +1,64 @@
+.close-login {
+  position: absolute;
+
+  top: 15px;
+  right: 18px;
+
+  width: 38px;
+  height: 38px;
+
+  border: none;
+  border-radius: 50%;
+
+  color: var(--text-bg);
+
+  font-size: 25px;
+  line-height: 1;
+
+  cursor: pointer;
+
+  z-index: 10;
+
+  transition: 0.2s;
+}
+
+.close-login:hover {
+  background: #6d3cc7;
+  color: white;
+
+  transform: rotate(90deg);
+}
+.close-login {
+  position: absolute;
+
+  top: 16px;
+  right: 18px;
+
+  width: 36px;
+  height: 36px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+  border-radius: 50%;
+
+  background: var(--background);
+
+  color: #ffffff;
+
+  font-size: 25px;
+  line-height: 1;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.close-login:hover {
+  background: rgba(129, 20, 202, 0.712);
+  transform: rotate(90deg);
+}

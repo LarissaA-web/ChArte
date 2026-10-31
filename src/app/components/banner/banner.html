@@ -1,0 +1,16 @@
+<div class="banner-container">
+  <div class="cover-photo">
+    <img class="cover-image" [src]="perfil.banner || 'assets/imagens/banner.jpg'" alt="Banner do perfil" />
+    @if (isOwner) {
+      <button class="image-edit image-edit-banner" type="button" aria-label="Alterar banner" title="Alterar banner" (click)="bannerInput.click()">✎</button>
+      <input #bannerInput class="image-file-input" type="file" accept="image/*" (change)="selecionarImagem($event, 'banner')" />
+    }
+    <div class="profile-container">
+      <img class="circle" [src]="perfil.fotoPerfil || 'assets/imagens/perfil.jpg'" [alt]="perfil.nomeArtistico || perfil.nome" />
+      @if (isOwner) {
+        <button class="image-edit image-edit-avatar" type="button" aria-label="Alterar foto de perfil" title="Alterar foto de perfil" (click)="fotoInput.click()">✎</button>
+        <input #fotoInput class="image-file-input" type="file" accept="image/*" (change)="selecionarImagem($event, 'foto')" />
+      }
+    </div>
+  </div>
+</div>

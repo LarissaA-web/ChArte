@@ -1,0 +1,123 @@
+@if ((modal.modalOpen$ | async) === 'chat') {
+  <div class="chat-overlay" (click)="modal.closeModal()">
+    <main class="chat-page" role="dialog" aria-modal="true" aria-label="Chat" (click)="$event.stopPropagation()">
+      <section class="conversations" aria-label="Conversas">
+        <header class="sidebar-heading">
+          <a class="brand" routerLink="/" (click)="modal.closeModal()">ChArte<span>✦</span></a>
+          <p>Suas conversas</p>
+        </header>
+
+        <div class="user-search">
+          <label class="visually-hidden" for="chat-search">Buscar pessoas</label>
+          <input
+            id="chat-search"
+            name="chatSearch"
+            type="search"
+            [ngModel]="search"
+            (ngModelChange)="buscarUsuarios($event)"
+            placeholder="Buscar pessoas..."
+            autocomplete="off"
+          />
+          @if (search.trim().length >= 2) {
+            <div class="search-results" aria-label="Resultados da busca">
+              @for (user of searchResults; track user.id) {
+                <button type="button" class="contact search-result" [disabled]="creatingConversation" (click)="iniciarConversa(user)">
+                  @if (user.avatarUrl) {
+                    <img class="avatar" [src]="user.avatarUrl" [alt]="" />
+                  } @else {
+                    <span class="avatar" aria-hidden="true">{{ user.displayName.slice(0, 2).toUpperCase() }}</span>
+                  }
+                  <span class="contact-copy"><strong>{{ user.displayName }}</strong><small>@{{ user.username }}</small></span>
+                </button>
+              } @empty {
+                <p class="search-empty">Nenhuma pessoa encontrada.</p>
+              }
+            </div>
+          }
+        </div>
+
+        <nav class="contact-list" aria-label="Contatos">
+          @if (loadingConversations) {
+            <p class="list-message">Carregando conversas…</p>
+          } @else {
+            @for (conversation of conversations; track conversation.id) {
+              <button
+                type="button"
+                class="contact"
+                [class.active]="selectedConversation?.id === conversation.id"
+                [attr.aria-current]="selectedConversation?.id === conversation.id ? 'page' : null"
+                (click)="selecionarConversa(conversation)"
+              >
+                @if (conversation.participant.avatarUrl) {
+                  <img class="avatar" [src]="conversation.participant.avatarUrl" [alt]="" />
+                } @else {
+                  <span class="avatar" aria-hidden="true">{{ conversation.participant.displayName.slice(0, 2).toUpperCase() }}</span>
+                }
+                <span class="contact-copy">
+                  <strong>{{ conversation.participant.displayName }}</strong>
+                  <small>{{ conversation.lastMessage?.content || '@' + conversation.participant.username }}</small>
+                </span>
+              </button>
+            } @empty {
+              @if (!errorMessage) { <p class="list-message">Você ainda não tem conversas. Busque alguém para começar.</p> }
+            }
+          }
+        </nav>
+        <button class="back-link" type="button" (click)="modal.closeModal()">Fechar chat</button>
+      </section>
+
+      @if (selectedConversation; as conversation) {
+        <section class="chat-panel" aria-label="Conversa com {{ conversation.participant.displayName }}">
+          <header class="chat-header">
+            @if (conversation.participant.avatarUrl) {
+              <img class="avatar" [src]="conversation.participant.avatarUrl" [alt]="" />
+            } @else {
+              <span class="avatar" aria-hidden="true">{{ conversation.participant.displayName.slice(0, 2).toUpperCase() }}</span>
+            }
+            <div class="header-copy">
+              <h1>{{ conversation.participant.displayName }}</h1>
+              <span class="username">@{{ conversation.participant.username }}</span>
+            </div>
+            <button class="close-chat" type="button" aria-label="Fechar chat" title="Fechar" (click)="modal.closeModal()">×</button>
+          </header>
+
+          <div class="messages" aria-live="polite" aria-relevant="additions">
+            @if (loadingMessages) {
+              <p class="empty-chat">Carregando mensagens…</p>
+            } @else {
+              @for (message of messages; track message.id) {
+                <article class="message" [class.mine]="mensagemMinha(message)">
+                  <p>{{ message.content }}</p>
+                  <time>{{ message.createdAt | date:'HH:mm' }}</time>
+                </article>
+              } @empty {
+                <p class="empty-chat">Esta conversa ainda não tem mensagens. Envie a primeira.</p>
+              }
+            }
+          </div>
+
+          <form class="message-form" (ngSubmit)="enviarMensagem()">
+            <label class="visually-hidden" for="chat-message">Digite uma mensagem</label>
+            <input
+              id="chat-message"
+              name="message"
+              type="text"
+              [(ngModel)]="draft"
+              placeholder="Escreva uma mensagem..."
+              autocomplete="off"
+              [disabled]="sending"
+            />
+            <button type="submit" [disabled]="!draft.trim() || sending">{{ sending ? 'Enviando…' : 'Enviar' }} <span aria-hidden="true">➤</span></button>
+          </form>
+        </section>
+      } @else {
+        <section class="chat-panel empty-panel">
+          <button class="close-chat" type="button" aria-label="Fechar chat" title="Fechar" (click)="modal.closeModal()">×</button>
+          <p>Selecione uma conversa ou busque alguém para começar.</p>
+        </section>
+      }
+
+      @if (errorMessage) { <div class="chat-error" role="alert">{{ errorMessage }}</div> }
+    </main>
+  </div>
+}

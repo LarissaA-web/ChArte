@@ -1,0 +1,129 @@
+<div class="modal-overlay">
+  <div class="modal-post">
+    <!-- CABEÇALHO -->
+    <header class="modal-header">
+      <div>
+        <h2>Nova postagem</h2>
+        <p>Compartilhe uma nova arte com a comunidade</p>
+      </div>
+
+      <button type="button" class="btn-fechar" (click)="fecharModal()">×</button>
+    </header>
+
+    <!-- CONTEÚDO -->
+    <div class="modal-content">
+      <!-- IMAGEM -->
+      <section class="imagem-section">
+        <label class="section-title"> Imagem da arte </label>
+
+        <div class="imagem-upload">
+          @if (previewImagem) { <img class="imagem-preview" [src]="previewImagem" alt="Prévia da arte" /> }
+          <div class="upload-icon">+</div>
+
+          <strong>Adicionar imagem</strong>
+          <span>PNG, JPG ou JPEG</span>
+
+          <input
+            type="file"
+            id="imagem"
+            accept="image/png, image/jpeg"
+            (change)="selecionarImagem($event)"
+            hidden
+          />
+
+          <label for="imagem" class="btn-upload"> Escolher imagem </label>
+          @if (imagemSelecionada) { <button type="button" class="btn-remover-imagem" (click)="removerImagem()">Remover imagem</button> }
+        </div>
+      </section>
+
+      <!-- TÍTULO -->
+      <div class="campo">
+        <label for="titulo"> Título </label>
+
+        <input id="titulo" type="text" [(ngModel)]="titulo" placeholder="Ex.: Floresta Encantada" />
+      </div>
+
+      <!-- DESCRIÇÃO -->
+      <div class="campo">
+        <label for="descricao"> Descrição </label>
+
+        <textarea
+          id="descricao"
+          [(ngModel)]="descricao"
+          placeholder="Conte um pouco sobre sua obra..."
+        >
+        </textarea>
+      </div>
+
+      <!-- CATEGORIA E ESTILO -->
+      <div class="campos-linha">
+        <div class="campo">
+          <label for="categoria"> Categoria </label>
+
+          <select id="categoria" [(ngModel)]="categoria">
+            <option value="">Selecione uma categoria</option>
+            @for (item of categorias; track item.nome) {
+              <option [value]="item.nome">{{ item.nome }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="estilo"> Estilo </label>
+
+          <select id="estilo" [(ngModel)]="estilo">
+            <option value="">Selecione um estilo</option>
+            @for (item of estilos; track item.nome) {
+              <option [value]="item.nome">{{ item.nome }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <!-- COMPRA -->
+      <section class="compra-section">
+        <div class="compra-header">
+          <div>
+            <strong>Disponível para compra</strong>
+
+            <p>Permitir que outros usuários possam comprar esta arte.</p>
+          </div>
+
+          <label class="switch">
+            <input type="checkbox" [(ngModel)]="compravel" />
+
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        @if (compravel) {
+          <div class="campo preco">
+            <label for="preco"> Preço </label>
+
+            <div class="preco-input">
+              <span>R$</span>
+
+              <input
+                id="preco"
+                type="number"
+                [(ngModel)]="preco"
+                min="0"
+                step="0.01"
+                placeholder="0,00"
+              />
+            </div>
+          </div>
+        }
+      </section>
+    </div>
+
+    @if (erro) { <p class="form-error" role="alert">{{ erro }}</p> }
+
+    <!-- RODAPÉ -->
+    <footer class="modal-footer">
+      <button type="button" class="btn-cancelar" (click)="fecharModal()">Cancelar</button>
+
+      <button type="button" class="btn-publicar" (click)="publicarPostagem()">Publicar arte</button>
+    </footer>
+  </div>
+</div>

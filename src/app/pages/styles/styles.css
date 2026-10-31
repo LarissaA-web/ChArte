@@ -1,0 +1,7 @@
+.catalog-page { min-height: calc(100vh - 70px); padding: 36px clamp(16px, 4vw, 64px) 100px; color: var(--text-bg, #eee); }
+.catalog-heading { max-width: 1440px; margin: 0 auto 30px; padding: 22px 26px; border: 1px solid rgba(255,255,255,.08); border-radius: 22px; background: linear-gradient(115deg, rgba(124,52,160,.22), rgba(255,255,255,.025) 62%); }
+.catalog-eyebrow { color: #d49aef; font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.catalog-heading h1 { margin: 8px 0 6px; font-size: clamp(30px, 4vw, 46px); line-height: 1.1; text-transform: capitalize; }
+.catalog-heading p { margin: 0; color: rgba(255,255,255,.62); font-size: 14px; }
+.catalog-empty { max-width: 1440px; margin: 0 auto; padding: 52px 24px; border: 1px dashed rgba(255,255,255,.16); border-radius: 18px; color: rgba(255,255,255,.65); text-align: center; }
+@media (max-width: 785px) { .catalog-page { padding: 24px 14px 90px; } .catalog-heading { margin-bottom: 20px; padding: 20px; } }

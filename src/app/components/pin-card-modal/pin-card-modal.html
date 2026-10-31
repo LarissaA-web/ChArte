@@ -1,0 +1,85 @@
+@if ((modal.modalOpen$ | async) === 'pinModal' && post) {
+  <div class="modal-overlay" (click)="modal.closeModal()">
+    <div class="container-login" (click)="$event.stopPropagation()">
+      <div class="container-modal-pin">
+        <button class="close-login" (click)="modal.closeModal()">×</button>
+
+        <div class="left">
+          <div class="pin-card modalPin">
+            <img [src]="post.portfolio" [alt]="post.descricao" />
+          </div>
+
+          <div class="tags-container">
+            <div class="tags">
+              <span class="tag"> #{{ post.categoria?.nomeCategoria }} </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="right">
+          <!-- ARTISTA -->
+          <div class="artist-info">
+            <div
+              class="circle-sm"
+              [routerLink]="['/perfil', post?.usuario?.nomeUsuario || 'muzzle']"
+              (click)="modal.closeModal()"
+            >
+              <img [src]="post?.usuario?.fotoPerfil" />
+            </div>
+
+            <div class="artist-name">
+              <div class="modalTitle">{{ post.titulo }}</div>
+
+              <div class="artist-username">@{{ post.nomeArtistico }}</div>
+            </div>
+          </div>
+
+          <!-- DESCRIÇÃO -->
+          <div class="description modalDescription">
+            <h3>Descrição</h3>
+            <p>{{ post.descricao || 'Esta publicação ainda não tem descrição.' }}</p>
+          </div>
+
+          <section class="modal-info-card" aria-label="Detalhes da obra">
+            <h3>Detalhes da obra</h3>
+            <div class="modal-info-row"><span>Categoria</span><strong>{{ post.categoria?.nomeCategoria || 'Não informada' }}</strong></div>
+            @if (post.estilo) { <div class="modal-info-row"><span>Estilo</span><strong>{{ post.estilo }}</strong></div> }
+            @if (post.tags?.length) { <div class="modal-info-row"><span>Tags</span><strong>{{ post.tags?.join(', ') }}</strong></div> }
+          </section>
+
+          <section class="modal-info-card artist-card" aria-label="Informações do artista">
+            <h3>Artista</h3>
+            <p>Conheça outras obras de {{ post.nomeArtistico }}.</p>
+            <a [routerLink]="['/perfil', post?.usuario?.nomeUsuario || 'muzzle']" (click)="modal.closeModal()">Ver perfil do artista <span aria-hidden="true">↗</span></a>
+          </section>
+        </div>
+        <div class="bottom-actions">
+          <button
+            class="btn-chat nav-action"
+            type="button"
+            aria-label="Abrir chat com o artista"
+            title="Chat"
+            (click)="abrirChatDoArtista()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.7 8.7 0 0 1-3.5-.7L4 20l1.1-3.5A7 7 0 0 1 4 12c0-4.1 3.6-7.5 8-7.5s8 3.1 8 7Z"
+              />
+              <path d="M8 12h.01M12 12h.01M16 12h.01" />
+            </svg>
+          </button>
+
+          <div class="bottom-right">
+            @if (post.preco > 0) {
+              <div class="price-block">
+                <span class="price-label">Disponível para compra</span>
+                <span class="price">{{ post.preco | currency:'BRL' }}</span>
+              </div>
+              <button class="btn-buy" type="button">Comprar</button>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+}

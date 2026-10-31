@@ -1,0 +1,30 @@
+<div class="colecao-container">
+  <header class="colecao-header">
+    <div class="colecao-info">
+      <h3>Coleção de Artes</h3>
+      <p>Todas as publicações e ilustrações do artista organizadas em galeria.</p>
+    </div>
+
+    @if (artes && artes.length > 0) {
+      <span class="count-badge">{{ artes.length }} publicações</span>
+    }
+  </header>
+
+  @if (artes && artes.length > 0) {
+    <div class="pin_container">
+      @for (arte of artes; track arte.id) {
+        <app-pin-card
+          [post]="arte"
+          (click)="abrirPin(arte)"
+        ></app-pin-card>
+      }
+    </div>
+  } @else {
+    <div class="sem-obras">
+      <div class="empty-icon">🖼️</div>
+      <h4>Nenhuma arte nesta coleção</h4>
+      <p>O artista ainda não adicionou publicações à sua coleção.</p>
+    </div>
+  }
+</div>
+

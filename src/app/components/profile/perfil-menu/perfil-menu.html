@@ -1,0 +1,49 @@
+<nav class="menu-perfil">
+  @if (mostrarAbasArtista) {
+    <button
+      type="button"
+      [class.active]="abaAtiva === 'portfolio'"
+      (click)="selecionarAba('portfolio')"
+    >
+      Portfólio
+    </button>
+  }
+
+  <button
+    type="button"
+    [class.active]="abaAtiva === 'colecao'"
+    (click)="selecionarAba('colecao')"
+  >
+    Coleção
+  </button>
+
+  @if (mostrarAbasArtista) {
+    <button
+      type="button"
+      [class.active]="abaAtiva === 'comissoes'"
+      (click)="selecionarAba('comissoes')"
+    >
+      Comissões
+    </button>
+  }
+
+  @if (mostrarConfiguracoes) {
+    <button
+      type="button"
+      [class.active]="abaAtiva === 'configuracoes'"
+      (click)="selecionarAba('configuracoes')"
+    >
+      Configurações
+    </button>
+  }
+
+  @if (mostrarAreaArtista) {
+    <button
+      type="button"
+      [class.active]="abaAtiva === 'artista'"
+      (click)="selecionarAba('artista')"
+    >
+      Área do Artista
+    </button>
+  }
+</nav>

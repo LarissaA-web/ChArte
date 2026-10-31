@@ -1,0 +1,50 @@
+@if ((modal.modalOpen$ | async) === 'artistLogin') {
+  <div class="modal-overlay" (click)="modal.closeModal()">
+    <div class="container-login" (click)="$event.stopPropagation()">
+      <header class="divLogo">
+        <h1 class="logo">ChArte</h1>
+      </header>
+      <main>
+        <button class="close-login" (click)="modal.closeModal()">×</button>
+
+        <form class="loginform" (ngSubmit)="$event.preventDefault(); entrar()">
+          <input type="email" name="gmail" id="gmail-txt" placeholder="E-mail" />
+
+          <input
+            [(ngModel)]="nomeUsuario"
+            type="text"
+            name="username"
+            id="username-txt"
+            placeholder="Usuário"
+          />
+
+          <div class="password-field-control">
+            <input
+              [(ngModel)]="senha"
+              [type]="mostrarSenha ? 'text' : 'password'"
+              name="password"
+              id="password-txt"
+              placeholder="Senha"
+            />
+            <button type="button" class="password-visibility" (click)="mostrarSenha = !mostrarSenha" [attr.aria-label]="mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'" [attr.aria-pressed]="mostrarSenha">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>@if (!mostrarSenha) { <path class="eye-slash" d="m4 4 16 16"/> }</svg>
+            </button>
+          </div>
+
+          <div class="logar">
+            <a href="">Esqueceu a senha?</a>
+
+            <div class="buttonbox">
+              <input type="submit" value="Logar" id="login" />
+            </div>
+          </div>
+        </form>
+
+        <footer class="modalfooter">
+          <p>Não tem uma conta?</p>
+          <a routerLink="/cadastro" (click)="modal.closeModal()">Criar conta</a>
+        </footer>
+      </main>
+    </div>
+  </div>
+}

@@ -1,0 +1,47 @@
+.close-login {
+  position: absolute;
+
+  top: 15px;
+  right: 18px;
+
+  width: 38px;
+  height: 38px;
+
+  border: none;
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.9);
+
+  color: #333;
+
+  font-size: 25px;
+  line-height: 1;
+
+  cursor: pointer;
+
+  z-index: 10;
+
+  transition: 0.2s;
+}
+.close-login:hover {
+  background: #6d3cc7;
+  color: white;
+
+  transform: rotate(90deg);
+}
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+
+  background: rgba(20, 10, 30, 0.72);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  padding: 2rem;
+
+  z-index: 1000;
+
+  backdrop-filter: blur(6px);
+}

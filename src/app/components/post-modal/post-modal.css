@@ -1,0 +1,548 @@
+/* =========================
+   OVERLAY
+========================= */
+
+.modal-overlay {
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 1000;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 30px;
+
+  box-sizing: border-box;
+
+  background: rgba(0, 0, 0, 0.65);
+
+  backdrop-filter: blur(6px);
+}
+
+/* =========================
+   MODAL
+========================= */
+
+.modal-post {
+  width: 100%;
+  max-width: 720px;
+
+  max-height: 90vh;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+
+  background: #2b2b47;
+
+  color: white;
+
+  border-radius: 16px;
+
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+}
+
+/* =========================
+   HEADER
+========================= */
+
+.modal-header {
+  display: flex;
+
+  align-items: flex-start;
+  justify-content: space-between;
+
+  padding: 24px 28px;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-header h2 {
+  margin: 0 0 5px;
+
+  font-size: 24px;
+}
+
+.modal-header p {
+  margin: 0;
+
+  color: rgba(255, 255, 255, 0.55);
+
+  font-size: 14px;
+}
+
+.btn-fechar {
+  width: 35px;
+  height: 35px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+
+  border-radius: 50%;
+
+  background: transparent;
+
+  color: rgba(255, 255, 255, 0.65);
+
+  font-size: 28px;
+
+  line-height: 1;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.btn-fechar:hover {
+  background: rgba(255, 255, 255, 0.08);
+
+  color: white;
+}
+
+/* =========================
+   CONTEÚDO
+========================= */
+
+.modal-content {
+  padding: 28px;
+
+  overflow-y: auto;
+}
+
+/* =========================
+   CAMPOS
+========================= */
+
+.campo {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 8px;
+
+  margin-bottom: 20px;
+}
+
+.campo label,
+.section-title {
+  color: rgba(255, 255, 255, 0.8);
+
+  font-size: 14px;
+
+  font-weight: 500;
+}
+
+.campo input,
+.campo textarea,
+.campo select {
+  width: 100%;
+
+  box-sizing: border-box;
+
+  padding: 12px 14px;
+
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  border-radius: 8px;
+
+  outline: none;
+
+  background: #202039;
+
+  color: white;
+
+  font-family: inherit;
+
+  font-size: 14px;
+
+  transition:
+    border 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.campo input::placeholder,
+.campo textarea::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.campo input:focus,
+.campo textarea:focus,
+.campo select:focus {
+  border-color: var(--btn-primary);
+
+  box-shadow: 0 0 0 2px rgba(139, 11, 224, 0.15);
+}
+
+.campo textarea {
+  min-height: 110px;
+
+  resize: vertical;
+}
+
+/* =========================
+   IMAGEM
+========================= */
+
+.imagem-section {
+  margin-bottom: 25px;
+}
+
+.imagem-upload {
+  min-height: 190px;
+
+  margin-top: 10px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+
+  border-radius: 12px;
+
+  background: #202039;
+
+  color: rgba(255, 255, 255, 0.7);
+
+  transition:
+    border 0.2s ease,
+    background 0.2s ease;
+}
+
+.imagem-upload:hover {
+  border-color: var(--btn-primary);
+
+  background: rgba(139, 11, 224, 0.05);
+}
+
+.upload-icon {
+  width: 45px;
+  height: 45px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 4px;
+
+  border-radius: 50%;
+
+  background: rgba(139, 11, 224, 0.15);
+
+  color: var(--btn-primary);
+
+  font-size: 30px;
+
+  font-weight: 300;
+}
+
+.imagem-upload strong {
+  color: white;
+
+  font-size: 15px;
+}
+
+.imagem-upload span {
+  color: rgba(255, 255, 255, 0.4);
+
+  font-size: 12px;
+}
+
+.btn-upload {
+  margin-top: 8px;
+
+  padding: 8px 15px;
+
+  border: 1px solid rgba(255, 255, 255, 0.15);
+
+  border-radius: 7px;
+
+  background: transparent;
+
+  color: rgba(255, 255, 255, 0.8);
+
+  cursor: pointer;
+
+  transition: background 0.2s ease;
+}
+
+.btn-upload:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* =========================
+   CATEGORIA / ESTILO
+========================= */
+
+.campos-linha {
+  display: grid;
+
+  grid-template-columns: 1fr 1fr;
+
+  gap: 16px;
+}
+
+/* =========================
+   COMPRA
+========================= */
+
+.compra-section {
+  margin-top: 5px;
+
+  padding: 18px;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+
+  border-radius: 10px;
+
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.compra-header {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 20px;
+}
+
+.compra-header strong {
+  font-size: 14px;
+}
+
+.compra-header p {
+  margin: 5px 0 0;
+
+  color: rgba(255, 255, 255, 0.45);
+
+  font-size: 12px;
+}
+
+/* =========================
+   SWITCH
+========================= */
+
+.switch {
+  position: relative;
+
+  flex-shrink: 0;
+
+  width: 45px;
+  height: 24px;
+}
+
+.switch input {
+  width: 0;
+  height: 0;
+
+  opacity: 0;
+}
+
+.slider {
+  position: absolute;
+
+  inset: 0;
+
+  border-radius: 20px;
+
+  background: #44445d;
+
+  cursor: pointer;
+
+  transition: background 0.2s ease;
+}
+
+.slider::before {
+  content: '';
+
+  position: absolute;
+
+  width: 18px;
+  height: 18px;
+
+  left: 3px;
+  top: 3px;
+
+  border-radius: 50%;
+
+  background: white;
+
+  transition: transform 0.2s ease;
+}
+
+.switch input:checked + .slider {
+  background: var(--btn-primary);
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(21px);
+}
+
+/* =========================
+   PREÇO
+========================= */
+
+.preco {
+  margin-top: 18px;
+
+  margin-bottom: 0;
+}
+
+.preco-input {
+  position: relative;
+
+  display: flex;
+
+  align-items: center;
+}
+
+.preco-input span {
+  position: absolute;
+
+  left: 14px;
+
+  color: rgba(255, 255, 255, 0.5);
+
+  font-size: 14px;
+}
+
+.preco-input input {
+  padding-left: 38px;
+}
+
+/* =========================
+   FOOTER
+========================= */
+
+.modal-footer {
+  display: flex;
+
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  padding: 18px 28px;
+
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-footer button {
+  padding: 11px 20px;
+
+  border-radius: 8px;
+
+  font-size: 14px;
+
+  font-weight: 500;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.15s ease,
+    background 0.2s ease;
+}
+
+.btn-cancelar {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+
+  background: transparent;
+
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.btn-cancelar:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.btn-publicar {
+  border: none;
+
+  background: var(--btn-primary);
+
+  color: white;
+}
+
+.btn-publicar:hover {
+  transform: translateY(-1px);
+
+  filter: brightness(1.1);
+}
+/* =========================
+   SCROLLBAR DO MODAL
+========================= */
+
+.modal-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--btn-primary) transparent;
+}
+
+/* Chrome, Edge, Safari */
+.modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 8px 0;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: var(--btn-primary);
+  border-radius: 10px;
+  border: 2px solid #2b2b47;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: rgb(160, 45, 235);
+}
+/* =========================
+   RESPONSIVO
+========================= */
+
+@media (max-width: 600px) {
+  .modal-overlay {
+    padding: 15px;
+  }
+
+  .modal-header,
+  .modal-content,
+  .modal-footer {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .campos-linha {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .modal-footer button {
+    width: 100%;
+  }
+}
+.imagem-preview { display: block; width: min(100%, 260px); max-height: 180px; margin: 10px auto; object-fit: contain; border-radius: 8px; }
+.btn-remover-imagem { display: block; margin: 8px auto 0; color: #e8cafa; background: transparent; border: 0; cursor: pointer; }
+.form-error { margin: 0 20px; color: #ff9ca7; font-size: 12px; }

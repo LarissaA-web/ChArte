@@ -1,0 +1,135 @@
+<div id="artist-area-root" class="artist-shell">
+  <button class="mobile-menu" type="button" (click)="menuAberto = !menuAberto" [attr.aria-expanded]="menuAberto">☰ <span>Menu da artista</span></button>
+  <aside class="artist-sidebar" [class.open]="menuAberto">
+    <a class="brand" routerLink="/">ChArte <small>ÁREA DO ARTISTA</small></a>
+    @for (grupo of secoes; track grupo.grupo) {
+      <section class="nav-group"><h2>{{ grupo.grupo }}</h2>
+        @for (item of grupo.itens; track item.id) {
+          <button type="button" [class.active]="secaoAtual === item.id" (click)="selecionarSecao(item.id)">{{ item.titulo }}</button>
+        }
+      </section>
+    }
+    <button type="button" class="logout" (click)="sair()">↪ Sair</button>
+  </aside>
+
+  <main class="artist-content">
+    <header class="area-heading">
+      <div><span class="eyebrow">ESPAÇO DE CRIAÇÃO</span><h1>Área do Artista</h1><p>Olá, {{ perfil.nomeArtistico || perfil.nome }}. Gerencie seu trabalho no ChArte.</p></div>
+      <button class="profile-shortcut" type="button" (click)="acessarPerfil()"><img [src]="perfil.fotoPerfil" [alt]="perfil.nomeArtistico || perfil.nome" /><span>Ver perfil público</span> ↗</button>
+    </header>
+
+    @if (secaoAtual === 'dashboard') {
+      <app-artist-dashboard [totalObras]="artes.length" [avaliacao]="avaliacaoMedia" [dados]="dashboardData" />
+      <section class="area-section activity-section"><header class="section-heading"><div><h2>Atividade recente</h2><p>Acompanhe as movimentações das suas comissões.</p></div></header>
+        <div class="commission-list">
+          @for (comissao of atividades; track comissao.id) {
+            <article class="commission-card"><img class="commission-avatar" [src]="comissao.cliente.foto" [alt]="comissao.cliente.nome" /><div class="commission-main"><h3>{{ comissao.titulo }}</h3><p>{{ comissao.cliente.nome }} · {{ comissao.criadaEm | date:'mediumDate' }}</p></div><span class="status-pill">{{ comissao.status }}</span></article>
+          } @empty { <p class="empty-state">Nenhuma atividade registrada nos dados de teste.</p> }
+        </div>
+      </section>
+    }
+
+    @if (secaoAtual === 'solicitacoes' || secaoAtual === 'comissoes' || secaoAtual === 'historico') {
+      <section class="area-section">
+        <header class="section-heading"><div><h2>{{ secaoAtual === 'solicitacoes' ? 'Solicitações de comissão' : secaoAtual === 'historico' ? 'Histórico de comissões' : 'Minhas comissões' }}</h2><p>{{ secaoAtual === 'solicitacoes' ? 'Revise os pedidos recebidos.' : 'Acompanhe status, valores e prazos.' }}</p></div></header>
+        <div class="filter-row" aria-label="Filtrar comissões">@for (filtro of filtrosComissao; track filtro) { <button [class.active]="filtroComissao === filtro" (click)="filtroComissao = filtro">{{ filtro }}</button> }</div>
+        <div class="commission-list">
+          @for (comissao of comissoesVisiveis; track comissao.id) {
+            <article class="commission-card commission-detail">
+              <img class="commission-avatar" [src]="comissao.cliente.foto" [alt]="comissao.cliente.nome" />
+              <div class="commission-main"><h3>{{ comissao.titulo }}</h3><p>{{ comissao.cliente.nome }} · @{{ comissao.cliente.username }} · criada {{ comissao.criadaEm | date:'mediumDate' }}</p><p>{{ comissao.descricao }}</p><div class="references">@for (referencia of comissao.referencias; track referencia) { @if (referencia.startsWith('data:image') || referencia.startsWith('blob:')) { <a [href]="referencia" target="_blank" rel="noopener"><img class="reference-thumb" [src]="referencia" alt="Imagem de referência" /> Abrir imagem</a> } @else { <a [href]="referencia" target="_blank" rel="noopener">Abrir referência ↗</a> } }</div></div>
+              <div class="commission-meta"><strong>{{ (comissao.propostaValor ?? comissao.valor) | currency:'BRL' }}</strong><small>Prazo: {{ comissao.propostaPrazo || comissao.prazo }}</small>@if (secaoAtual === 'historico' && comissao.concluidaEm) { <small>Conclusão {{ comissao.concluidaEm | date:'mediumDate' }}</small> }<span class="status-pill">{{ comissao.status }}</span></div>
+              @if (secaoAtual === 'solicitacoes' && comissao.status === 'Solicitada') { <div class="commission-actions proposal-actions"><label>Valor proposto (R$)<input type="number" min="1" step="0.01" [ngModel]="comissao.propostaValor ?? comissao.valor" (ngModelChange)="comissao.propostaValor = $event" /></label><label>Prazo estimado<input type="text" maxlength="80" [ngModel]="comissao.propostaPrazo ?? comissao.prazo" (ngModelChange)="comissao.propostaPrazo = $event" /></label><button type="button" class="primary-action" (click)="aceitar(comissao)">Enviar proposta</button><button type="button" class="danger-action" (click)="recusar(comissao)">Recusar</button></div> }
+              @if (secaoAtual === 'comissoes' && comissao.status === 'Aguardando aprovação do cliente') { <span class="status-hint">Proposta enviada · aguardando resposta do cliente</span> }
+              @if (secaoAtual === 'comissoes' && (comissao.status === 'Pendente' || comissao.status === 'Em andamento')) { <button type="button" class="primary-action" (click)="abrirDetalhesComissao(comissao)">Ver comissão</button> }
+              @if (secaoAtual === 'comissoes' && comissao.status === 'Entregue') { <button type="button" class="primary-action" (click)="finalizar(comissao)">Marcar como finalizada</button> }
+              @if (comissao.arquivoEntrega) { <a class="delivery-link" [href]="comissao.arquivoEntrega" target="_blank" rel="noopener">Ver entrega</a> }
+            </article>
+          } @empty { <div class="empty-state"><span>✦</span><h3>Nenhuma comissão nesta seção</h3><p>Os pedidos e atualizações de teste aparecerão aqui.</p></div> }
+        </div>
+      </section>
+    }
+
+    @if (secaoAtual === 'opcoes-comissao') {
+      <section class="area-section catalog-section">
+        <header class="section-heading"><div><h2>Opções de comissão</h2><p>Gerencie os cards e as regras exibidas no seu perfil público.</p></div><button class="primary-action" type="button" (click)="novaOpcaoComissao()">Adicionar opção</button></header>
+        <div class="settings-card commission-availability"><label class="toggle-row"><span><strong>Aceitar novas comissões</strong><small>Atualiza o status exibido no perfil público.</small></span><input type="checkbox" [(ngModel)]="privacidade.aceitarComissoes" (change)="salvarPrivacidade()" /></label></div>
+        <div class="offer-grid">
+          @for (opcao of opcoesComissao; track opcao.id) {
+            <article class="offer-card" [class.offer-inactive]="!opcao.ativa">
+              <header><div><h3>{{ opcao.titulo }}</h3><span class="status-pill">{{ opcao.ativa ? 'Publicada' : 'Oculta' }}</span></div><strong>{{ opcao.precoInicial | currency:'BRL' }}</strong></header>
+              <p>{{ opcao.descricao }}</p><small>Prazo: {{ opcao.prazo }}</small>
+              <ul>@for (item of opcao.itens; track item) { <li>{{ item }}</li> }</ul>
+              <div class="offer-actions"><button type="button" class="secondary-action" (click)="editarOpcaoComissao(opcao)">Editar</button><button type="button" class="secondary-action" (click)="alternarOpcaoComissao(opcao)">{{ opcao.ativa ? 'Ocultar' : 'Publicar' }}</button><button type="button" class="danger-action" (click)="excluirOpcaoComissao(opcao)">Excluir</button></div>
+            </article>
+          } @empty { <p class="empty-state">Você ainda não cadastrou opções de comissão.</p> }
+        </div>
+        @if (opcaoEditando) {
+          <form class="settings-card catalog-form" (ngSubmit)="salvarOpcaoComissao()">
+            <h3>{{ opcaoEditando.id ? 'Editar opção' : 'Nova opção' }}</h3>
+            <div class="catalog-form-grid"><label>Título<input required maxlength="80" [(ngModel)]="opcaoEditando.titulo" name="ofertaTitulo" /></label><label>Preço inicial (R$)<input required type="number" min="0" step="0.01" [(ngModel)]="opcaoEditando.precoInicial" name="ofertaPreco" /></label><label>Prazo estimado<input required maxlength="80" [(ngModel)]="opcaoEditando.prazo" name="ofertaPrazo" placeholder="Ex.: 5 a 10 dias úteis" /></label><label class="catalog-wide">Descrição<textarea required rows="3" maxlength="1000" [(ngModel)]="opcaoEditando.descricao" name="ofertaDescricao"></textarea></label><label class="catalog-wide">O que está incluído (um item por linha)<textarea rows="4" [(ngModel)]="itensOfertaTexto" name="ofertaItens"></textarea></label></div>
+            <div class="catalog-flags"><label><input type="checkbox" [(ngModel)]="opcaoEditando.destaque" name="ofertaDestaque" /> Destacar no perfil</label><label><input type="checkbox" [(ngModel)]="opcaoEditando.ativa" name="ofertaAtiva" /> Publicar no perfil</label></div>
+            @if (erroCatalogo) { <p class="form-message">{{ erroCatalogo }}</p> }
+            <div class="offer-actions"><button class="secondary-action" type="button" (click)="opcaoEditando = null">Cancelar</button><button class="primary-action" type="submit">Salvar opção</button></div>
+          </form>
+        }
+
+        <header class="section-heading guidelines-heading"><div><h2>Diretrizes para comissões</h2><p>Explique etapas, limites e condições do seu processo.</p></div><button class="secondary-action" type="button" (click)="novaDiretriz()">Adicionar diretriz</button></header>
+        <div class="guideline-list">
+          @for (diretriz of diretrizesComissao; track diretriz.id) { <article class="guideline-card"><div><h3>{{ diretriz.titulo }}</h3><p>{{ diretriz.descricao }}</p></div><div class="offer-actions"><button class="secondary-action" type="button" (click)="editarDiretriz(diretriz)">Editar</button><button class="danger-action" type="button" (click)="excluirDiretriz(diretriz)">Excluir</button></div></article> }
+          @empty { <p class="empty-state">Adicione diretrizes para orientar quem solicita uma comissão.</p> }
+        </div>
+        @if (diretrizEditando) { <form class="settings-card catalog-form" (ngSubmit)="salvarDiretriz()"><h3>{{ diretrizEditando.id ? 'Editar diretriz' : 'Nova diretriz' }}</h3><label>Título<input required maxlength="100" [(ngModel)]="diretrizEditando.titulo" name="diretrizTitulo" /></label><label>Descrição<textarea required rows="3" maxlength="1000" [(ngModel)]="diretrizEditando.descricao" name="diretrizDescricao"></textarea></label>@if (erroCatalogo) { <p class="form-message">{{ erroCatalogo }}</p> }<div class="offer-actions"><button class="secondary-action" type="button" (click)="diretrizEditando = null">Cancelar</button><button class="primary-action" type="submit">Salvar diretriz</button></div></form> }
+      </section>
+    }
+
+    @if (secaoAtual === 'portfolio') { <app-portfolio [artes]="artes" /> }
+    @if (secaoAtual === 'artes') {
+      <section class="area-section"><header class="section-heading"><div><h2>Minhas Artes</h2><p>{{ artes.length }} obras no portfólio de teste.</p></div><button class="primary-action" type="button" (click)="selecionarSecao('adicionar')">Adicionar obra</button></header>
+        @if (artes.length) { <div class="works-grid">@for (obra of artes; track obra.id) { <article class="work-card"><app-pin-card [post]="obra" (click)="abrirPin(obra)"></app-pin-card><div class="work-info"><div class="work-title-row"><h3>{{ obra.titulo }}</h3><span class="work-status">{{ statusDaObra(obra.preco) }}</span></div><p>{{ obra.categoria.nomeCategoria }} · {{ obra.preco ? (obra.preco | currency:'BRL') : 'Sem preço' }}</p><div class="work-actions"><button type="button" (click)="iniciarEdicaoArte(obra)">Editar</button><button type="button" class="text-action" (click)="excluirArte(obra)">Excluir</button></div></div></article> }</div> }
+        @else { <div class="empty-state"><span>🎨</span><h3>Seu portfólio está esperando por você</h3><p>Adicione uma obra para testar a experiência.</p><button class="primary-action" (click)="selecionarSecao('adicionar')">Adicionar arte</button></div> }
+      </section>
+    }
+
+    @if (secaoAtual === 'adicionar') { <section class="area-section"><header class="section-heading"><div><h2>Adicionar arte</h2><p>Use o formulário existente de publicação de obras.</p></div></header><div class="settings-card add-art-card"><span class="note-mark">✦</span><p>Imagem, categoria, estilo, descrição e preço serão registrados junto às suas artes de teste.</p><button class="primary-action" type="button" (click)="abrirCriacaoArte()">Criar nova arte</button></div></section> }
+
+    @if (secaoAtual === 'avaliacoes') {
+      <section class="area-section"><header class="section-heading"><div><h2>Avaliações</h2><p>Feedback de clientes nos dados de teste.</p></div></header><div class="reviews-summary"><strong>★ {{ avaliacaoMedia | number:'1.1-1' }}</strong><span>{{ avaliacoes.length }} avaliações</span></div><div class="review-list">@for (avaliacao of avaliacoes; track avaliacao.id) { <article class="review-card"><header class="review-person"><div><h3>{{ avaliacao.cliente }}</h3><span class="stars">{{ '★'.repeat(avaliacao.nota) }}{{ '☆'.repeat(5 - avaliacao.nota) }}</span></div><time>{{ avaliacao.data | date:'mediumDate' }}</time></header><p>{{ avaliacao.comentario }}</p></article> } @empty { <p class="empty-state">Ainda não há avaliações para este perfil de teste.</p> }</div></section>
+    }
+
+    @if (secaoAtual === 'privacidade') { <section class="area-section"><header class="section-heading"><div><h2>Privacidade</h2><p>Preferências locais de visualização para os dados de teste.</p></div></header><div class="settings-card"><label class="toggle-row"><span><strong>Perfil público</strong><small>Permite que outras pessoas encontrem seu perfil.</small></span><input type="checkbox" [(ngModel)]="privacidade.perfilPublico" /></label><label class="toggle-row"><span><strong>Exibir redes sociais</strong><small>Mostra redes na página do perfil.</small></span><input type="checkbox" [(ngModel)]="privacidade.exibirRedesSociais" /></label><label class="toggle-row"><span><strong>Exibir informações</strong><small>Mostra bio e apresentação.</small></span><input type="checkbox" [(ngModel)]="privacidade.exibirInformacoes" /></label><label class="toggle-row"><span><strong>Aceitar comissões</strong><small>Indica disponibilidade para novos pedidos.</small></span><input type="checkbox" [(ngModel)]="privacidade.aceitarComissoes" /></label><button class="primary-action" (click)="salvarPrivacidade()">Salvar preferências</button><form class="username-form" (ngSubmit)="alterarUsername()"><h3>Alterar username</h3><p>ID interno: {{ perfil.idUsuario }} (fixo)</p><label>Novo username<input required minlength="3" maxlength="24" [(ngModel)]="usernameNovo" name="novoUsername" placeholder="seu_username" /></label><button class="secondary-action" type="submit">Atualizar username</button></form>@if (mensagemSeguranca) { <p class="form-message">{{ mensagemSeguranca }}</p> }</div></section> }
+
+    @if (secaoAtual === 'seguranca') { <section class="area-section"><header class="section-heading"><div><h2>Segurança</h2><p>Alterações aplicadas somente aos mocks desta sessão.</p></div></header><div class="settings-card security-grid"><form class="editor-form" (ngSubmit)="alterarEmail()"><h3>Alterar e-mail</h3><label>Novo e-mail<input required type="email" [(ngModel)]="emailNovo" name="emailNovo" /></label><button class="primary-action" type="submit">Atualizar e-mail</button></form><form class="editor-form" (ngSubmit)="alterarSenha()"><h3>Alterar senha</h3>
+      <label>Senha atual<div class="password-field-control"><input required [type]="mostrarSenhaAtual ? 'text' : 'password'" [(ngModel)]="senhaAtual" name="senhaAtual" /><button type="button" class="password-visibility" (click)="mostrarSenhaAtual = !mostrarSenhaAtual" [attr.aria-label]="mostrarSenhaAtual ? 'Ocultar senha atual' : 'Mostrar senha atual'" [attr.aria-pressed]="mostrarSenhaAtual"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>@if (!mostrarSenhaAtual) { <path class="eye-slash" d="m4 4 16 16"/> }</svg></button></div></label>
+      <label>Nova senha<div class="password-field-control"><input required [type]="mostrarSenhaNova ? 'text' : 'password'" [(ngModel)]="senhaNova" name="senhaNova" /><button type="button" class="password-visibility" (click)="mostrarSenhaNova = !mostrarSenhaNova" [attr.aria-label]="mostrarSenhaNova ? 'Ocultar nova senha' : 'Mostrar nova senha'" [attr.aria-pressed]="mostrarSenhaNova"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>@if (!mostrarSenhaNova) { <path class="eye-slash" d="m4 4 16 16"/> }</svg></button></div></label>
+      <label>Confirmar nova senha<div class="password-field-control"><input required [type]="mostrarSenhaConfirmacao ? 'text' : 'password'" [(ngModel)]="senhaConfirmacao" name="senhaConfirmacao" /><button type="button" class="password-visibility" (click)="mostrarSenhaConfirmacao = !mostrarSenhaConfirmacao" [attr.aria-label]="mostrarSenhaConfirmacao ? 'Ocultar confirmação da senha' : 'Mostrar confirmação da senha'" [attr.aria-pressed]="mostrarSenhaConfirmacao"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>@if (!mostrarSenhaConfirmacao) { <path class="eye-slash" d="m4 4 16 16"/> }</svg></button></div></label>
+      <button class="primary-action" type="submit">Atualizar senha</button></form>@if (mensagemSeguranca) { <p class="form-message">{{ mensagemSeguranca }}</p> }</div></section> }
+
+    @if (secaoAtual === 'seguranca') { <section class="area-section"><header class="section-heading"><div><h2>Apagar conta</h2><p>Esta ação encerra sua sessão e remove o perfil.</p></div></header><app-delete-account-card [nomeUsuario]="perfil.nomeUsuario" /></section> }
+</main>
+@if (editandoArte) {
+  <div class="dialog-backdrop" role="presentation" (click)="editandoArte = null">
+    <form class="delivery-dialog" role="dialog" aria-modal="true" aria-labelledby="edit-art-title" (click)="$event.stopPropagation()" (ngSubmit)="salvarArte()">
+      <button type="button" class="dialog-close" aria-label="Fechar edição" (click)="editandoArte = null">×</button>
+      <h2 id="edit-art-title">Editar arte</h2>
+      <label>Título<input [(ngModel)]="editandoArte.titulo" name="editTitulo" required maxlength="100" /></label>
+      <label>Descrição<textarea [(ngModel)]="editandoArte.descricao" name="editDescricao" rows="4"></textarea></label>
+      <div class="edit-art-grid">
+        <label>Categoria<input [(ngModel)]="editandoArte.categoria.nomeCategoria" name="editCategoria" required maxlength="60" /></label>
+        <label>Estilo<input [(ngModel)]="editandoArte.estilo" name="editEstilo" maxlength="60" /></label>
+        <label>Preço (R$)<input type="number" min="0" step="0.01" [(ngModel)]="editandoArte.preco" name="editPreco" required /></label>
+      </div>
+      <label class="upload-box">{{ previewEdicaoArte ? 'Trocar imagem da obra' : 'Selecionar imagem da obra (até 5 MB)' }}<input type="file" accept="image/*" (change)="selecionarImagemEdicao($event)" /></label>
+      @if (previewEdicaoArte) { <img class="art-preview" [src]="previewEdicaoArte" alt="Prévia da imagem da arte" /> }
+      @if (erroEdicaoArte) { <p class="form-message" role="alert">{{ erroEdicaoArte }}</p> }
+      <div class="offer-actions"><button type="button" class="secondary-action" (click)="editandoArte = null; previewEdicaoArte = ''; erroEdicaoArte = ''">Cancelar</button><button type="submit" class="primary-action">Salvar alterações</button></div>
+    </form>
+  </div>
+}
+</div>
+
+@if (entregaAtual) { <div class="dialog-backdrop" role="presentation"><section class="delivery-dialog" role="dialog" aria-modal="true" aria-labelledby="delivery-title"><button class="dialog-close" (click)="entregaAtual = null" aria-label="Fechar">×</button><h2 id="delivery-title">Enviar comissão</h2><p>Entrega para {{ entregaAtual.cliente.nome }} · {{ entregaAtual.titulo }}</p><label class="upload-box">{{ arquivoSelecionado ? 'Trocar imagem' : 'Selecionar imagem final (até 5 MB)' }}<input type="file" accept="image/*" (change)="selecionarArquivo($event)" /></label>@if (erroEntrega) { <p class="form-message">{{ erroEntrega }}</p> }@if (previewEntrega) { <img class="art-preview" [src]="previewEntrega" alt="Prévia da entrega" /> } @if (arquivoSelecionado) { <div class="file-row"><span>{{ arquivoSelecionado.name }}</span><button type="button" (click)="arquivoSelecionado = null; previewEntrega = ''">Remover</button></div> }<label>Observação<textarea [(ngModel)]="observacaoEntrega" rows="3"></textarea></label><button class="primary-action" [disabled]="!previewEntrega.startsWith('data:image')" (click)="enviarEntrega()">Registrar entrega</button></section></div> }
+
+<app-pin-card-modal></app-pin-card-modal>
+
+@if (comissaoSelecionada) { <app-commission-detail-modal [comissao]="comissaoSelecionada" (fechar)="comissaoSelecionada = null" (iniciar)="iniciarComissaoSelecionada()" (enviar)="enviarComissaoSelecionada()" /> }

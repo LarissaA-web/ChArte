@@ -1,0 +1,76 @@
+.menu-perfil {
+  display: flex;
+  width: 100%;
+  height: 56px;
+  min-height: 56px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 0 30px;
+  gap: 32px;
+  flex-wrap: nowrap;
+  background: #202039;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.menu-perfil::-webkit-scrollbar {
+  display: none;
+}
+
+.menu-perfil button {
+  position: relative;
+  flex: 0 0 auto;
+  height: 100%;
+  padding: 16px 6px;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 15px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.menu-perfil button:hover {
+  color: white;
+}
+
+.menu-perfil button::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  height: 3px;
+  border-radius: 4px 4px 0 0;
+  background: #9b24e8;
+  transition: width 0.25s ease;
+}
+
+.menu-perfil button.active {
+  color: white;
+}
+
+.menu-perfil button.active::after {
+  width: 100%;
+}
+
+@media (max-width: 600px) {
+  .menu-perfil {
+    height: 56px;
+    min-height: 56px;
+    padding: 0 16px;
+    gap: 20px;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+
+  .menu-perfil button {
+    font-size: 14px;
+    padding: 14px 4px;
+  }
+}

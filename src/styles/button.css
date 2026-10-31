@@ -1,0 +1,81 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0.65rem 1.5rem;
+  margin: 3px;
+  border-radius: 30px;
+  border: none;
+
+  font-size: 1rem;
+  font-weight: 500rem;
+  background-color: var(--btn);
+  cursor: pointer;
+  transition: none;
+  color: var(--text-bg);
+}
+.btn:hover {
+  background-color: var(--btn-hover);
+}
+
+.btn-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 25px;
+  height: 45px;
+  padding: 0.65rem 1.5rem;
+  margin: 2px;
+  border-radius: 100%;
+  border: none;
+  background-color: var(--btn);
+  color: var(--text-bg);
+  font-size: 1rem;
+  font-weight: 500rem;
+
+  cursor: pointer;
+  transition: none;
+}
+.btn-lg {
+}
+
+.btn-primary {
+  background-color: var(--btn-primary) !important;
+  color: var(--btn-primary-btn);
+  font-weight: bold;
+}
+
+.btn-secondary {
+  background-color: var(--btn-secondary) !important;
+  color: var(--text-secondary-btn) !important;
+}
+
+.btn-danger {
+}
+.btn-sucess {
+}
+
+.btnFav {
+  margin-right: 35px;
+  display: flex;
+  justify-self: right;
+  border-radius: 0 0 12px 12px;
+  height: 50px;
+  width: 35px;
+  position: absolute;
+  background: rgba(255, 255, 255, 0.527);
+  border: none;
+  cursor: pointer;
+}
+
+.btnLike {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  margin: 10px 30px;
+  cursor: pointer;
+}

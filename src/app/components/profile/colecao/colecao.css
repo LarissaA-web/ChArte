@@ -1,0 +1,66 @@
+.colecao-container {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.colecao-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.colecao-info h3 {
+  font-size: 20px;
+  color: white;
+  margin: 0 0 6px 0;
+  font-weight: 600;
+}
+
+.colecao-info p {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+}
+
+.count-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.sem-obras {
+  padding: 60px 20px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+}
+
+.empty-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.sem-obras h4 {
+  font-size: 18px;
+  color: white;
+  margin: 0 0 8px 0;
+}
+
+.sem-obras p {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 14px;
+  margin: 0;
+}
+
+

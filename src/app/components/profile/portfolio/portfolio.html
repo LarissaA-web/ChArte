@@ -1,0 +1,32 @@
+<div class="portfolio-container">
+  <!-- APRESENTAÇÃO DA VITRINE -->
+  <header class="portfolio-header">
+    <div class="vitrine-info">
+      <h3>Vitrine de Trabalhos</h3>
+      <p>Seleção especial de ilustrações, projetos autorais e criações artísticas.</p>
+    </div>
+
+    @if (artes && artes.length > 0) {
+      <div class="portfolio-stats">
+        <span class="badge-tag">{{ artes.length }} obras em destaque</span>
+      </div>
+    }
+  </header>
+
+  @if (artes && artes.length > 0) {
+    <div class="pin_container">
+      @for (arte of artes; track arte.id) {
+        <app-pin-card
+          [post]="arte"
+          (click)="abrirPin(arte)"
+        ></app-pin-card>
+      }
+    </div>
+  } @else {
+    <div class="sem-obras">
+      <div class="empty-icon">🎨</div>
+      <h4>Nenhuma obra em exibição</h4>
+      <p>O artista ainda não selecionou trabalhos para compor esta vitrine.</p>
+    </div>
+  }
+</div>

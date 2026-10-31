@@ -1,0 +1,123 @@
+import { Injectable } from '@angular/core';
+import { BehaviorSubject, Observable, of } from 'rxjs';
+import { Post } from '../app/models/post';
+import { MOCK_ARTES } from '../app/mocks/artes.mock';
+import { supabase } from '../app/core/supabase/supabase.client';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class PinService {
+  artes: Post[] = [...MOCK_ARTES];
+
+  //pega todas as artes
+  getArtes(): Post[] {
+    return this.artes;
+  }
+
+  //pega artes por categoria
+  buscarPorCategoria(categoria: string): Observable<Post[]> {
+    const filtro = this.normalizar(categoria);
+    return of(this.artes.filter((arte) => this.normalizar(arte.categoria.nomeCategoria) === filtro));
+  }
+
+  buscarPorEstilo(estilo: string): Observable<Post[]> {
+    const filtro = this.normalizar(estilo);
+    return of(this.artes.filter((arte) =>
+      this.normalizar(arte.estilo ?? '') === filtro ||
+      (arte.tags ?? []).some((tag) => this.normalizar(tag) === filtro),
+    ));
+  }
+
+  private normalizar(valor: string): string {
+    return valor.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+  }
+
+  //pega artes de um artista em especifico por artistaId
+  getArtist(artistaId: number): Post[] {
+    return this.artes.filter((arte) => arte.usuario.artistaId === artistaId);
+  }
+
+  //pega artes de um artista pelo nomeUsuario
+  getArtesPorArtista(nomeUsuario: string): Post[] {
+    return this.artes.filter(
+      (arte) => arte.usuario.nomeUsuario?.toLowerCase() === nomeUsuario.trim().toLowerCase(),
+    );
+  }
+
+  adicionarArte(dados: { titulo: string; descricao: string; portfolio: string; categoria: string; estilo: string; preco: number }, perfil: import('../app/models/perfil').PerfilView): Post {
+    const arte: Post = {
+      id: Math.max(0, ...this.artes.map((item) => item.id)) + 1,
+      titulo: dados.titulo, descricao: dados.descricao, portfolio: dados.portfolio,
+      nomeArtistico: perfil.nomeArtistico || perfil.nome, preco: dados.preco, estilo: dados.estilo,
+      usuario: { id: Number(perfil.idUsuario.slice(-2)) || 1, artistaId: perfil.idArtista || 0, nomeUsuario: perfil.nomeUsuario, nomeArtistico: perfil.nomeArtistico || perfil.nome, fotoPerfil: perfil.fotoPerfil },
+      categoria: { id: 0, nomeCategoria: dados.categoria },
+    };
+    this.artes = [...this.artes, arte];
+    return { ...arte };
+  }
+
+  atualizarArte(arte: Post): void {
+    this.artes = this.artes.map((item) => item.id === arte.id ? { ...arte } : item);
+  }
+
+  excluirArte(id: number): void {
+    this.artes = this.artes.filter((item) => item.id !== id);
+  }
+
+async carregarArtes(): Promise<void> {
+  
+const { data, error } = await supabase
+  .from('portifolio')
+  .select(`
+    id_portifolio,
+    id_artista,
+    id_categoria,
+    titulo,
+    descricao,
+    preco,
+    imagem,
+    data_envio,
+    artista (
+      id_artista,
+      nome_artistico
+    ),
+    categoria (
+      id_categoria,
+      nome_categoria
+    )
+  `);
+
+  if (error) {
+    console.error('Erro ao carregar artes:', error);
+    return;
+  }
+
+  this.artes = (data ?? []).map((item: any): Post => ({
+    id: item.id_portifolio,
+    titulo: item.titulo,
+    descricao: item.descricao ?? '',
+    portfolio: item.imagem,
+    nomeArtistico: item.artista?.nome_artistico ?? 'Artista',
+    preco: Number(item.preco),
+
+    usuario: {
+      id: 0,
+      artistaId: item.id_artista,
+      nomeArtistico: item.artista?.nome_artistico ?? 'Artista',
+      fotoPerfil: '/gato.jpeg',
+    },
+
+    categoria: {
+      id: item.id_categoria,
+      nomeCategoria:
+        item.categoria?.nome_categoria ?? 'Sem categoria',
+    },
+
+    criadoEm: item.data_envio,
+  }));
+
+  console.log('ARTES CONVERTIDAS PARA POST:', this.artes);
+}
+  
+}

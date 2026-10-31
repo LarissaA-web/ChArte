@@ -1,0 +1,54 @@
+<div class="comissoes-container">
+  <header class="comissoes-status-bar">
+    <div class="status-box">
+      <span class="status-indicator" [class.aberto]="comissoesAbertas"></span>
+      <div><strong class="status-title">{{ comissoesAbertas ? 'Comissões Abertas' : 'Comissões Temporariamente Fechadas' }}</strong><p class="status-sub">{{ comissoesAbertas ? 'Vagas disponíveis para produção personalizada.' : 'A artista não está aceitando novos pedidos.' }}</p></div>
+    </div>
+    <div class="artist-avaliacao-badge"><span class="star">★</span><strong>{{ perfil?.avaliacaoMedia || 4.8 }}</strong><span class="reviews-count">({{ perfil?.totalReviews || 15 }} avaliações)</span></div>
+  </header>
+
+  <section class="pacotes-section">
+    <h3 class="section-title">Opções de Comissões</h3>
+    <div class="pacotes-grid">
+      @for (pacote of pacotes; track pacote.id) {
+        <article class="pacote-card" [class.destaque]="pacote.destaque">
+          @if (pacote.destaque) { <span class="card-badge">Destaque</span> }
+          <div class="pacote-topo"><h4 class="pacote-title">{{ pacote.titulo }}</h4><p class="pacote-desc">{{ pacote.descricao }}</p></div>
+          <div class="pacote-preco-box"><span class="a-partir">A partir de</span><span class="valor">{{ pacote.precoInicial | currency:'BRL' }}</span><span class="prazo">Prazo médio: {{ pacote.prazo }}</span></div>
+          <ul class="pacote-itens">@for (item of pacote.itens; track item) { <li><span class="check">✓</span> {{ item }}</li> }</ul>
+          @if (perfilEhDono) { <span class="owner-note">Edite esta opção pela área do artista.</span> }
+          @else { <button class="btn-solicitar" type="button" [disabled]="!comissoesAbertas" (click)="abrirSolicitacao(pacote)">{{ comissoesAbertas ? 'Solicitar orçamento' : 'Comissões fechadas' }}</button> }
+        </article>
+      } @empty { <p class="empty-state">Esta artista ainda não cadastrou opções de comissão.</p> }
+    </div>
+  </section>
+
+  <section class="termos-section">
+    <h3 class="section-title">Diretrizes & Processo</h3>
+    <div class="termos-cards">
+      @for (diretriz of diretrizes; track diretriz.id) { <article class="termo-card"><h4>{{ diretriz.titulo }}</h4><p>{{ diretriz.descricao }}</p></article> }
+      @empty { <p class="empty-state">Nenhuma diretriz foi publicada.</p> }
+    </div>
+  </section>
+</div>
+
+@if (opcaoSelecionada) {
+  <div class="solicitacao-backdrop" (click)="opcaoSelecionada = null">
+    <section class="solicitacao-modal" role="dialog" aria-modal="true" aria-labelledby="solicitacao-titulo" (click)="$event.stopPropagation()">
+      <button class="solicitacao-fechar" type="button" aria-label="Fechar" (click)="opcaoSelecionada = null">×</button>
+      <span class="solicitacao-eyebrow">NOVO PEDIDO · {{ perfil?.nomeArtistico || perfil?.nome }}</span>
+      <h2 id="solicitacao-titulo">Solicitar orçamento</h2>
+      <p class="solicitacao-pacote">{{ opcaoSelecionada.titulo }} · a partir de {{ opcaoSelecionada.precoInicial | currency:'BRL' }}</p>
+      <form (ngSubmit)="enviarSolicitacao()">
+        <label>Título do pedido<input name="titulo" required maxlength="100" [(ngModel)]="titulo" placeholder="Ex.: Retrato da minha personagem" /></label>
+        <label>Descrição<textarea name="descricao" required rows="4" [(ngModel)]="descricao" placeholder="Conte o que você imaginou para a comissão."></textarea></label>
+        <label>Fotos de referência <small>Até 5 imagens, máximo de 5 MB cada</small><input type="file" accept="image/*" multiple (change)="selecionarFotos($event)" /></label>
+        @if (previewFotos.length) { <div class="referencias-preview">@for (foto of previewFotos; track foto) { <img [src]="foto" alt="Prévia de referência" /> }</div> }
+        <label>Links de referência <small>Um endereço por linha</small><textarea name="referencias" rows="2" [(ngModel)]="referencias" placeholder="https://..."></textarea></label>
+        @if (erro) { <p class="solicitacao-erro">{{ erro }}</p> }
+        <p class="solicitacao-nota">Você ainda não será cobrado. A artista enviará uma proposta com valor e prazo para sua aprovação.</p>
+        <div class="solicitacao-acoes"><button class="solicitacao-cancelar" type="button" [disabled]="enviando" (click)="opcaoSelecionada = null">Voltar</button><button class="solicitacao-enviar" type="submit" [disabled]="enviando">{{ enviando ? 'Enviando…' : 'Enviar solicitação' }}</button></div>
+      </form>
+    </section>
+  </div>
+}

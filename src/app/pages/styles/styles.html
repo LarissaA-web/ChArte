@@ -1,0 +1,21 @@
+<app-search-bar></app-search-bar>
+<main class="catalog-page">
+  <header class="catalog-heading">
+    <span class="catalog-eyebrow">Explorar estilo</span>
+    <h1>{{ estilo }}</h1>
+    <p>{{ artes.length }} {{ artes.length === 1 ? 'pin encontrado' : 'pins encontrados' }}</p>
+  </header>
+
+  @if (artes.length) {
+    <div class="pin_container">
+      @for (post of artes; track post.id) {
+        <app-pin-card [post]="post"></app-pin-card>
+      }
+    </div>
+  } @else {
+    <p class="catalog-empty">Ainda não há pins neste estilo.</p>
+  }
+</main>
+<app-pin-card-modal></app-pin-card-modal>
+<app-artist-login-modal></app-artist-login-modal>
+<app-sub-menu></app-sub-menu>

@@ -1,0 +1,62 @@
+<section class="dashboard" aria-labelledby="dashboard-title">
+  <header class="dashboard-heading">
+    <div><h2 id="dashboard-title">Visão geral</h2><p>Pedidos e desempenho das suas comissões.</p></div>
+    <span class="period-chip">{{ totalComissoes }} comissões no total</span>
+  </header>
+
+  <section class="status-overview" aria-label="Resumo de comissões por status">
+    @for (status of statusResumo; track status.status) {
+      <article class="status-card"><span class="status-dot" [style.backgroundColor]="status.cor"></span><span>{{ status.status }}</span><strong>{{ status.valor }}</strong></article>
+    }
+  </section>
+
+  <div class="metric-grid">
+    <article class="metric-card"><span class="metric-icon">R$</span><span class="metric-label">Ganhos deste mês</span><strong>{{ metricas.ganhos | currency:'BRL' }}</strong><small>comissões finalizadas</small></article>
+    <article class="metric-card"><span class="metric-icon star-icon">★</span><span class="metric-label">Avaliação média</span><strong>{{ avaliacao | number:'1.1-1' }}</strong><small>{{ totalObras }} obras no portfólio</small></article>
+  </div>
+
+  <div class="charts-grid">
+    <svg class="svg-definitions" aria-hidden="true" focusable="false"><defs><linearGradient id="commissionGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#d6a0fa"/><stop offset="100%" stop-color="#7625ba"/></linearGradient></defs></svg>
+    <article class="chart-card">
+      <header><div><h3>Esta semana</h3><p>Novos pedidos por dia</p></div><strong>{{ metricas.semana }}<small>na semana</small></strong></header>
+      @if (algumValor(dados.comissoesSemana)) {
+        <svg class="bar-chart" viewBox="0 0 720 210" role="img" aria-label="Comissões recebidas em cada dia desta semana">
+          <g class="chart-grid-lines"><line x1="38" y1="50" x2="708" y2="50"/><line x1="38" y1="114" x2="708" y2="114"/><line x1="38" y1="178" x2="708" y2="178"/></g>
+          @for (barra of barras(dados.comissoesSemana); track barra.periodo) { <g><title>{{ barra.periodo }}: {{ barra.valor }} comissões</title><rect class="commission-bar" [attr.x]="barra.x" [attr.y]="barra.y" [attr.width]="barra.largura" [attr.height]="barra.altura" rx="5"/><text class="axis-label" [attr.x]="barra.x + barra.largura / 2" y="202">{{ barra.rotulo }}</text></g> }
+        </svg>
+      } @else { <p class="chart-empty">Nenhum pedido recebido nesta semana.</p> }
+    </article>
+
+    <article class="chart-card">
+      <header><div><h3>Este mês</h3><p>Novos pedidos por dia</p></div><strong>{{ metricas.mes }}<small>no mês</small></strong></header>
+      @if (algumValor(dados.comissoesMes)) {
+        <svg class="bar-chart" viewBox="0 0 720 210" role="img" aria-label="Comissões recebidas em cada dia deste mês">
+          <g class="chart-grid-lines"><line x1="38" y1="50" x2="708" y2="50"/><line x1="38" y1="114" x2="708" y2="114"/><line x1="38" y1="178" x2="708" y2="178"/></g>
+          @for (barra of barras(dados.comissoesMes); track barra.periodo) { <g><title>{{ barra.periodo }}: {{ barra.valor }} comissões</title><rect class="commission-bar" [attr.x]="barra.x" [attr.y]="barra.y" [attr.width]="barra.largura" [attr.height]="barra.altura" rx="3"/></g> }
+          @for (barra of barrasDeMes(dados.comissoesMes); track barra.periodo) { <text class="axis-label" [attr.x]="barra.x + barra.largura / 2" y="202">{{ barra.rotulo }}</text> }
+        </svg>
+      } @else { <p class="chart-empty">Nenhum pedido recebido neste mês.</p> }
+    </article>
+
+    <article class="chart-card">
+      <header><div><h3>Este ano</h3><p>Novos pedidos por mês</p></div><strong>{{ metricas.ano }}<small>no ano</small></strong></header>
+      @if (algumValor(dados.comissoesAno)) {
+        <svg class="bar-chart" viewBox="0 0 720 210" role="img" aria-label="Comissões recebidas em cada mês deste ano">
+          <g class="chart-grid-lines"><line x1="38" y1="50" x2="708" y2="50"/><line x1="38" y1="114" x2="708" y2="114"/><line x1="38" y1="178" x2="708" y2="178"/></g>
+          @for (barra of barras(dados.comissoesAno); track barra.periodo) { <g><title>{{ barra.rotulo }}: {{ barra.valor }} comissões</title><rect class="commission-bar" [attr.x]="barra.x" [attr.y]="barra.y" [attr.width]="barra.largura" [attr.height]="barra.altura" rx="4"/><text class="axis-label" [attr.x]="barra.x + barra.largura / 2" y="202">{{ barra.rotulo }}</text></g> }
+        </svg>
+      } @else { <p class="chart-empty">Nenhum pedido recebido neste ano.</p> }
+    </article>
+
+    <article class="chart-card earnings-card">
+      <header><div><h3>Ganhos por mês</h3><p>Comissões finalizadas neste ano</p></div><strong>{{ resumoMaiorValor(dados.ganhosPorMes) | currency:'BRL':'symbol':'1.0-0' }}<small>maior valor mensal</small></strong></header>
+      @if (existeGanhoNoPeriodo) {
+        <svg class="line-chart" viewBox="0 0 720 210" role="img" aria-label="Ganhos mensais com comissões finalizadas neste ano">
+          <g class="chart-grid-lines"><line x1="38" y1="50" x2="708" y2="50"/><line x1="38" y1="114" x2="708" y2="114"/><line x1="38" y1="178" x2="708" y2="178"/></g>
+          <polyline class="income-line" [attr.points]="pontosLinha(dados.ganhosPorMes)" />
+          @for (ponto of linha(dados.ganhosPorMes); track ponto.periodo) { <g><title>{{ ponto.rotulo }}: {{ ponto.valor | currency:'BRL' }}</title><circle class="income-point" [attr.cx]="ponto.x" [attr.cy]="ponto.y" r="4"/><text class="axis-label" [attr.x]="ponto.x" y="202">{{ ponto.rotulo }}</text></g> }
+        </svg>
+      } @else { <p class="chart-empty">Os ganhos aparecerão após a conclusão de comissões.</p> }
+    </article>
+  </div>
+</section>

@@ -1,0 +1,251 @@
+/*:root {
+  --text-bg: rgb(230, 230, 230);
+  --card_width: 250px;
+  --card_border_radius: 16px;
+  --row_increment: 10px;
+
+  vertical
+  --pin-card_small: 26;
+  --pin-card_medium: 33;
+  --pin-card_large: 45;
+
+  --pin-card_horizontal: 2;
+  horizontal
+  --pin-card_small-h: 40;
+  --pin-card_medium-h: 55;
+  --pin-card_large-h: 70;
+}*/
+
+.pin_container {
+  margin: 0 15px;
+  padding: 0;
+  width: calc(100% - 30px);
+  position: absolute;
+  columns: 5 320px;
+}
+
+@media (max-width: 785px) {
+  .pin_container {
+    position: static;
+    display: block;
+    width: calc(100% - 30px);
+    box-sizing: border-box;
+    column-count: 2;
+    column-gap: 12px;
+  }
+
+  .pin_container app-pin-card {
+    display: block;
+    width: auto;
+    min-width: 0;
+    margin: 0 0 12px;
+    vertical-align: top;
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+  }
+
+  .pin_container .pin-card {
+    width: 100%;
+    margin: 0;
+    box-sizing: border-box;
+    break-inside: avoid;
+  }
+}
+
+.pin-card {
+  width: 90%;
+  margin: auto;
+  margin-bottom: 20px;
+  padding: 10px 0;
+  overflow: hidden;
+
+  break-inside: avoid;
+}
+
+.pin-card img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  border-radius: 35px;
+  cursor: pointer;
+}
+
+.pin-card .title {
+  margin-top: 10px;
+  color: beige;
+}
+
+.description {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px;
+}
+
+.card {
+  display: inline-block;
+  background-color: var(--loading);
+  width: 250px;
+  height: 150px;
+  flex-shrink: 0;
+  margin: 5px;
+  cursor: pointer;
+
+  border-radius: 15px;
+}
+.card img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  border-radius: 15px;
+  cursor: pointer;
+}
+
+.card-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  min-width: 132px;
+  max-width: min(220px, calc(100vw - 24px));
+  min-height: 72px;
+  box-sizing: border-box;
+  padding: 7px;
+  flex-shrink: 0;
+  background-color: transparent;
+  border-radius: 10px;
+  margin: 5px;
+  cursor: pointer;
+}
+
+.card-lg {
+  width: 100%;
+  height: 25vh;
+  cursor: pointer;
+}
+
+.Imagecard-sm {
+}
+.Imagecard-lg {
+  width: 120px;
+  height: 120px;
+}
+.circle {
+  flex-shrink: 0;
+  width: 10rem;
+  height: 10rem;
+  border-radius: 100%;
+  margin: 5px;
+  background-color: var(--loading);
+
+  border-radius: 100%;
+
+  align-content: center;
+}
+.circle-sm {
+  flex-shrink: 0;
+
+  width: 3.5rem;
+  height: 3.5rem;
+  background-color: var(--loading);
+
+  border-radius: 100%;
+  overflow: hidden;
+}
+
+.circle-sm img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  cursor: pointer;
+}
+
+.card-sm .style {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.card-sm .style p {
+  margin: 0;
+  color: aliceblue;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.circle-sm:hover {
+  transform: scale(1.06);
+
+  box-shadow: 0 5px 15px rgba(112, 64, 198, 0.3);
+}
+
+/*somente o img filho direteo*/
+.pin-card > img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+.circle-lg {
+  border-radius: 100%;
+
+  width: 5rem;
+  height: 5rem;
+  margin: 10px;
+
+  background-color: var(--loading);
+
+  overflow: hidden;
+}
+
+.swipeablesCards {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-evenly;
+
+  width: 100%;
+  overflow-x: scroll;
+  overflow-y: hidden;
+
+  background-color: var(--trp);
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.swipeablesCards:active {
+  cursor: grabbing;
+}
+.swipeablesCards::-webkit-scrollbar {
+  display: none;
+}
+.sloganCard {
+  display: flex;
+  background-color: red;
+  background-color: var(--trp);
+  width: fit-content;
+  height: 60px;
+}
+.sloganCard h2 {
+  margin: 5px;
+  color: var();
+}
+
+/**/
+
+.perfilCard {
+  display: flex;
+  position: absolute;
+  top: 150px;
+  left: 80px;
+  z-index: 10;
+  background-color: aqua;
+}
+.mural {
+  padding-top: 35%;
+  height: max-content;
+  background-color: blueviolet;
+}
+.desc {
+  background-color: yellow;
+}

@@ -1,0 +1,49 @@
+<div class="settings-shell">
+  @if (perfil) {
+    <aside class="settings-sidebar">
+      <a class="back-link" [routerLink]="['/perfil', perfil.nomeUsuario]">← Voltar ao perfil</a>
+      <div class="sidebar-title"><span class="eyebrow">SUA CONTA</span><h1>Configurações</h1></div>
+      <nav aria-label="Menu de configurações">
+        <button type="button" [class.active]="secao === 'informacoes'" (click)="selecionarSecao('informacoes')"><span>◉</span> Informações</button>
+        <button type="button" [class.active]="secao === 'seguranca'" (click)="selecionarSecao('seguranca')"><span>⌑</span> Segurança</button>
+        <button type="button" class="delete-nav" [class.active]="secao === 'apagar-conta'" (click)="selecionarSecao('apagar-conta')"><span>⌫</span> Apagar conta</button>
+      </nav>
+    </aside>
+
+    <main class="settings-content">
+      @if (secao === 'informacoes') {
+        <header class="settings-heading"><span class="eyebrow">PERFIL</span><h2>Informações e privacidade</h2><p>Confira seus dados e escolha o que fica visível no seu perfil.</p></header>
+        <section class="settings-card account-summary">
+          <div><span>Nome</span><strong>{{ perfil.nome }}</strong></div>
+          <div><span>Nome de usuário</span><strong>@{{ perfil.nomeUsuario }}</strong></div>
+          <div><span>Tipo de conta</span><strong>Usuário comum</strong></div>
+        </section>
+        <section class="settings-card">
+          <header class="card-heading"><div><h3>Privacidade</h3><p>Escolha o que outras pessoas podem ver no seu perfil.</p></div></header>
+          <label class="toggle-row"><span><strong>Perfil público</strong><small>Permite que outras pessoas encontrem seu perfil.</small></span><input type="checkbox" [(ngModel)]="privacidade.perfilPublico" /></label>
+          <label class="toggle-row"><span><strong>Exibir informações</strong><small>Mostra sua apresentação e biografia.</small></span><input type="checkbox" [(ngModel)]="privacidade.exibirInformacoes" /></label>
+          <label class="toggle-row"><span><strong>Exibir redes sociais</strong><small>Mostra as redes sociais adicionadas ao perfil.</small></span><input type="checkbox" [(ngModel)]="privacidade.exibirRedesSociais" /></label>
+          <div class="settings-actions"><button class="primary-action" type="button" (click)="salvarPrivacidade()">Salvar preferências</button></div>
+          @if (mensagem) { <p class="feedback success" role="status">{{ mensagem }}</p> }
+        </section>
+      }
+
+      @if (secao === 'seguranca') {
+        <header class="settings-heading"><span class="eyebrow">SUA CONTA</span><h2>Segurança</h2><p>Atualize as credenciais usadas para acessar sua conta.</p></header>
+        <section class="settings-card">
+          <form class="settings-form" (ngSubmit)="salvarEmail()"><div><h3>E-mail</h3><p>Use um endereço válido para acessar sua conta.</p></div><label>Novo e-mail<input required type="email" [(ngModel)]="emailNovo" name="emailNovo" autocomplete="email" /></label><button class="secondary-action" type="submit">Atualizar e-mail</button></form>
+          <form class="password-form" (ngSubmit)="salvarSenha()"><header><h3>Senha</h3><p>Escolha uma senha com pelo menos 6 caracteres.</p></header><label>Senha atual<input required type="password" [(ngModel)]="senhaAtual" name="senhaAtual" autocomplete="current-password" /></label><label>Nova senha<input required minlength="6" type="password" [(ngModel)]="senhaNova" name="senhaNova" autocomplete="new-password" /></label><label>Confirmar nova senha<input required minlength="6" type="password" [(ngModel)]="senhaConfirmacao" name="senhaConfirmacao" autocomplete="new-password" /></label><button class="primary-action" type="submit">Atualizar senha</button></form>
+          @if (erro) { <p class="feedback error" role="alert">{{ erro }}</p> }
+          @if (mensagem) { <p class="feedback success" role="status">{{ mensagem }}</p> }
+        </section>
+      }
+
+      @if (secao === 'apagar-conta') {
+        <header class="settings-heading"><span class="eyebrow">AÇÃO PERMANENTE</span><h2>Apagar conta</h2><p>Revise o que acontece antes de continuar.</p></header>
+        <app-delete-account-card [nomeUsuario]="perfil.nomeUsuario" />
+      }
+    </main>
+  } @else {
+    <main class="settings-loading"><p>Carregando configurações…</p></main>
+  }
+</div>

@@ -1,0 +1,108 @@
+@media (max-width: 768px) {
+  /* O fundo do modal ocupa toda a tela */
+  .modal-overlay {
+    padding: 0;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  /* Modal ocupa toda a tela */
+  .container-modal-pin {
+    width: 100vw;
+    min-height: 100vh;
+    max-height: 100vh;
+
+    border-radius: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Conteúdo principal */
+  .container-modal-pin .left,
+  .container-modal-pin .right {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .container-modal-pin .left {
+    padding: 70px 20px 20px;
+  }
+
+  .container-modal-pin .right {
+    padding: 25px 20px 20px;
+  }
+
+  /* Imagem */
+  .pin-card {
+    width: 100%;
+    height: auto;
+    max-height: none;
+
+    aspect-ratio: auto;
+  }
+
+  .pin-card img {
+    width: 100%;
+    height: auto;
+    max-height: none;
+
+    object-fit: contain;
+  }
+
+  /* Informações do artista */
+  .artist-info {
+    margin-bottom: 25px;
+  }
+  /*
+  .title {
+    font-size: 20px;
+  }
+*/
+  /* Descrição */
+  .modalDescription {
+    overflow: visible;
+    padding: 15px;
+  }
+
+  .modalDescription p {
+    font-size: 16px;
+  }
+
+  /* Barra inferior */
+  .bottom-actions {
+    width: 100%;
+
+    grid-column: auto;
+
+    position: sticky;
+    bottom: 0;
+
+    padding: 15px 20px;
+
+    margin-top: 20px;
+
+    background: var(--background);
+
+    border-top: 1px solid #ffffff20;
+
+    z-index: 50;
+  }
+
+  /* Scroll */
+  .container-modal-pin::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .container-modal-pin::-webkit-scrollbar-track {
+    margin: 10px 0;
+  }
+
+  .container-modal-pin::-webkit-scrollbar-thumb {
+    background: #ad50ff;
+    border-radius: 20px;
+  }
+}

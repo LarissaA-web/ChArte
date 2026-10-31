@@ -1,0 +1,13 @@
+.delete-card { display: flex; align-items: flex-start; gap: 16px; padding: 20px; border: 1px solid rgba(222, 86, 105, .36); border-radius: 14px; background: rgba(104, 31, 44, .17); color: #f8f5fa; }
+.warning-icon { display: grid; flex: 0 0 30px; width: 30px; height: 30px; place-items: center; border: 1px solid rgba(255, 139, 153, .45); border-radius: 50%; color: #ff9da5; font-weight: 800; }
+.delete-copy { flex: 1; min-width: 0; }
+.delete-copy h3 { margin: 2px 0 6px; font-size: 16px; }
+.delete-copy p { margin: 0 0 15px; color: #c6b6bd; font-size: 13px; line-height: 1.5; }
+.delete-copy label { display: grid; gap: 7px; margin-bottom: 13px; color: #e1d5da; font-size: 12px; }
+.delete-copy input { width: 100%; max-width: 370px; box-sizing: border-box; padding: 10px 12px; border: 1px solid #60434b; border-radius: 8px; background: #1b1518; color: #fff; font: inherit; }
+.delete-copy input:focus { outline: 2px solid rgba(222, 86, 105, .4); border-color: #dc6477; }
+.delete-error { color: #ff9da5 !important; }
+.delete-button { padding: 10px 14px; border: 1px solid #d14e63; border-radius: 9px; background: #8d2939; color: #fff; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+.delete-button:hover:not(:disabled) { background: #a83245; }
+.delete-button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 520px) { .delete-card { padding: 16px; } }

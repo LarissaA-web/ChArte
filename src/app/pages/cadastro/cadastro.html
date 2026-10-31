@@ -1,0 +1,424 @@
+<main class="signup-page">
+  <aside class="loading-gallery" aria-hidden="true">
+    @for (linha of galeria; track $index) {
+      <div
+        class="loading-gallery__row"
+        [class.loading-gallery__row--down]="linha.itens[0]?.direcao === 'down'"
+        [style.--column-duration]="linha.itens[0]?.duracao"
+        [style.--column-delay]="linha.itens[0]?.atraso"
+      >
+        <div class="loading-gallery__track">
+          @for (copia of [0, 1]; track copia) {
+            <div class="loading-gallery__group" [attr.aria-hidden]="copia === 1 ? true : null">
+              @for (item of linha.itens; track $index) {
+                <figure
+                  class="loading-gallery__tile"
+                  [class.loading-gallery__tile--filled]="!!item.imagem"
+                  [style.flex-grow]="item.tamanho"
+                >
+                  @if (item.imagem) {
+                    <img [src]="item.imagem" alt="" />
+                  }
+                </figure>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </aside>
+
+  <section class="signup-panel" aria-labelledby="signup-title">
+    <header class="signup-header">
+      <a class="signup-brand" routerLink="/">ChArte</a>
+    </header>
+
+    <form
+      class="signup-form"
+      (ngSubmit)="criarConta()"
+      [attr.aria-busy]="carregando ? 'true' : 'false'"
+      aria-describedby="signup-feedback"
+    >
+      <label
+        class="signup-field"
+        [class.signup-field--error]="campoInvalido('nome')"
+        aria-describedby="nome-erro"
+      >
+        <span class="signup-label">Nome</span>
+        <input
+          required
+          maxlength="80"
+          [(ngModel)]="nome"
+          name="nome"
+          #nomeControl="ngModel"
+          autocomplete="name"
+          placeholder="Como podemos te chamar?"
+          [attr.aria-invalid]="campoInvalido('nome') ? 'true' : 'false'"
+          aria-describedby="nome-erro"
+        />
+        @if (campoInvalido('nome')) {
+          <span id="nome-erro" class="signup-field-error" role="alert">
+            <svg class="field-error-icon" viewBox="0 0 20 20" aria-hidden="true"
+              ><circle cx="10" cy="10" r="9" fill="currentColor" /><text x="10" y="14" fill="currentColor" font-size="11" font-weight="700" text-anchor="middle">!</text></svg>
+            {{ erros['nome'] }}
+          </span>
+        }
+      </label>
+
+      <label
+        class="signup-field"
+        [class.signup-field--error]="campoInvalido('nomeUsuario')"
+        aria-describedby="nome-usuario-erro"
+      >
+        <span class="signup-label">Nome de usuário</span>
+        <input
+          required
+          minlength="3"
+          maxlength="24"
+          pattern="[A-Za-z0-9_.]+"
+          [(ngModel)]="nomeUsuario"
+          name="nomeUsuario"
+          #nomeUsuarioControl="ngModel"
+          autocomplete="username"
+          placeholder="seu_usuario"
+          [attr.aria-invalid]="campoInvalido('nomeUsuario') ? 'true' : 'false'"
+          aria-describedby="nome-usuario-erro"
+        />
+        @if (campoInvalido('nomeUsuario')) {
+          <span id="nome-usuario-erro" class="signup-field-error" role="alert">
+            <svg class="field-error-icon" viewBox="0 0 20 20" aria-hidden="true"
+              ><circle cx="10" cy="10" r="9" fill="currentColor" /><text x="10" y="14" fill="currentColor" font-size="11" font-weight="700" text-anchor="middle">!</text></svg>
+            {{ erros['nomeUsuario'] }}
+          </span>
+        }
+      </label>
+
+      <label class="signup-field" [class.signup-field--error]="campoInvalido('email')" aria-describedby="email-erro">
+        <span class="signup-label">E-mail</span>
+        <input
+          required
+          type="email"
+          maxlength="254"
+          [(ngModel)]="email"
+          name="email"
+          #emailControl="ngModel"
+          autocomplete="email"
+          inputmode="email"
+          autocapitalize="none"
+          spellcheck="false"
+          placeholder="voce@email.com"
+          [attr.aria-invalid]="(emailControl.invalid && (emailControl.dirty || emailControl.touched)) || campoInvalido('email') ? 'true' : 'false'"
+          aria-describedby="email-hint email-erro"
+        />
+        <span id="email-hint" class="signup-hint">Use um endereço no formato voce@email.com.</span>
+        @if ((emailControl.invalid && (emailControl.dirty || emailControl.touched)) || campoInvalido('email')) {
+          <span id="email-erro" class="signup-field-error" role="alert">
+            @if (campoInvalido('email')) {
+              {{ erros['email'] }}
+            }
+            @else if (emailControl.errors?.['required']) { Informe seu e-mail. }
+            @else { Confira o formato do e-mail. }
+          </span>
+        }
+      </label>
+
+      <div class="signup-trio">
+        <label class="signup-field" [class.signup-field--error]="campoInvalido('dataNascimento')" aria-describedby="data-nascimento-erro">
+          <span class="signup-label">Data de nascimento</span>
+          <input
+            required
+            type="date"
+            [(ngModel)]="dataNascimento"
+            name="dataNascimento"
+            autocomplete="bday"
+            [max]="dataMaxima"
+            #dataNascimentoControl="ngModel"
+            [attr.aria-invalid]="(dataNascimentoControl.invalid && (dataNascimentoControl.dirty || dataNascimentoControl.touched)) || campoInvalido('dataNascimento') ? 'true' : 'false'"
+            aria-describedby="data-nascimento-hint data-nascimento-erro"
+            (change)="atualizarCorData()"
+          />
+          <span id="data-nascimento-hint" class="signup-hint">Você deve ter pelo menos 13 anos.</span>
+          @if ((dataNascimentoControl.invalid && (dataNascimentoControl.dirty || dataNascimentoControl.touched)) || campoInvalido('dataNascimento')) {
+            <span id="data-nascimento-erro" class="signup-field-error" role="alert">
+              @if (campoInvalido('dataNascimento')) {
+                {{ erros['dataNascimento'] }}
+              }
+              @else if (dataNascimentoControl.errors?.['required']) { Informe sua data de nascimento. }
+              @else { Data inválida ou idade inferior a 13 anos. }
+            </span>
+          }
+        </label>
+
+        <label class="signup-field" [class.signup-field--error]="campoInvalido('genero')" aria-describedby="genero-erro">
+          <span class="signup-label">Gênero</span>
+          <select
+            required
+            [(ngModel)]="genero"
+            name="genero"
+            autocomplete="off"
+            #generoControl="ngModel"
+            [attr.aria-invalid]="(generoControl.invalid && (generoControl.dirty || generoControl.touched)) || campoInvalido('genero') ? 'true' : 'false'"
+            aria-describedby="genero-erro"
+          >
+            <option value="" disabled>Selecione</option>
+            @for (g of generos; track g) {
+              <option [value]="g">{{ g }}</option>
+            }
+          </select>
+          @if ((generoControl.invalid && (generoControl.dirty || generoControl.touched)) || campoInvalido('genero')) {
+            <span id="genero-erro" class="signup-field-error" role="alert">
+              @if (campoInvalido('genero')) {
+                {{ erros['genero'] }}
+              }
+              @else { Selecione uma opção de gênero. }
+            </span>
+          }
+        </label>
+
+        <label class="signup-field" [class.signup-field--error]="campoInvalido('telefone')" aria-describedby="telefone-erro">
+          <span class="signup-label">Telefone</span>
+          <input
+            required
+            type="tel"
+            maxlength="15"
+            [(ngModel)]="telefone"
+            name="telefone"
+            #telefoneControl="ngModel"
+            autocomplete="tel"
+            placeholder="(DD) 99999-9999"
+            inputmode="tel"
+            [attr.aria-invalid]="(telefoneControl.invalid && (telefoneControl.dirty || telefoneControl.touched)) || campoInvalido('telefone') ? 'true' : 'false'"
+            aria-describedby="telefone-hint telefone-erro"
+          />
+          <span id="telefone-hint" class="signup-hint">Formato: (DD) 99999-9999 ou (DD) 9999-9999</span>
+          @if ((telefoneControl.invalid && (telefoneControl.dirty || telefoneControl.touched)) || campoInvalido('telefone')) {
+            <span id="telefone-erro" class="signup-field-error" role="alert">
+              @if (campoInvalido('telefone')) {
+                {{ erros['telefone'] }}
+              }
+              @else if (telefoneControl.errors?.['required']) { Informe seu telefone. }
+              @else { Telefone inválido. }
+            </span>
+          }
+        </label>
+      </div>
+
+      <div class="signup-field">
+        <span class="signup-label">Tipo de conta</span>
+        <div class="signup-segment" role="radiogroup" aria-label="Tipo de conta">
+          @for (tipo of tipos; track tipo) {
+            <button
+              type="button"
+              role="radio"
+              [attr.aria-checked]="tipoUsuario === tipo"
+              [class.active]="tipoUsuario === tipo"
+              (click)="tipoUsuario = tipo"
+            >
+              {{ rotuloTipo(tipo) }}
+            </button>
+          }
+        </div>
+      </div>
+
+      @if (tipoUsuario === 'Artista') {
+        <label class="signup-field signup-field--reveal" [class.signup-field--error]="campoInvalido('nomeArtistico')" aria-describedby="nome-artistico-erro">
+          <span class="signup-label">NickName</span>
+          <input
+            required
+            maxlength="80"
+            [(ngModel)]="nomeArtistico"
+            name="nomeArtistico"
+            #nomeArtisticoControl="ngModel"
+            placeholder="Como você assina suas obras"
+            [attr.aria-invalid]="campoInvalido('nomeArtistico') ? 'true' : 'false'"
+            aria-describedby="nome-artistico-erro"
+          />
+          @if (campoInvalido('nomeArtistico')) {
+            <span id="nome-artistico-erro" class="signup-field-error" role="alert">
+              <svg class="field-error-icon" viewBox="0 0 20 20" aria-hidden="true"
+                ><circle cx="10" cy="10" r="9" fill="currentColor" /><text x="10" y="14" fill="currentColor" font-size="11" font-weight="700" text-anchor="middle">!</text></svg>
+              {{ erros['nomeArtistico'] }}
+            </span>
+          }
+        </label>
+      }
+
+      <div class="signup-duo">
+        <label class="signup-field" [class.signup-field--error]="campoInvalido('senha')" aria-describedby="senha-erro">
+          <span class="signup-label">Senha</span>
+          <div class="password-field-control">
+            <input
+              required
+              [type]="mostrarSenha ? 'text' : 'password'"
+              minlength="6"
+              maxlength="72"
+              [(ngModel)]="senha"
+              name="senha"
+              #senhaControl="ngModel"
+              autocomplete="new-password"
+              [attr.aria-invalid]="campoInvalido('senha') ? 'true' : 'false'"
+              aria-describedby="senha-erro senha-hint"
+            />
+            <button
+              type="button"
+              class="password-visibility"
+              (click)="mostrarSenha = !mostrarSenha"
+              [attr.aria-label]="mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'"
+              [attr.aria-pressed]="mostrarSenha"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>@if (!mostrarSenha) { <path class="eye-slash" d="m4 4 16 16"/> }</svg>
+            </button>
+          </div>
+          @if (campoInvalido('senha')) {
+            <span id="senha-erro" class="signup-field-error" role="alert">
+              <svg class="field-error-icon" viewBox="0 0 20 20" aria-hidden="true"
+                ><circle cx="10" cy="10" r="9" fill="currentColor" /><text x="10" y="14" fill="currentColor" font-size="11" font-weight="700" text-anchor="middle">!</text></svg>
+              {{ erros['senha'] }}
+            </span>
+          }
+        </label>
+
+        <label class="signup-field" [class.signup-field--error]="campoInvalido('confirmarSenha')" aria-describedby="confirmar-senha-erro">
+          <span class="signup-label">Confirmar senha</span>
+          <div class="password-field-control">
+            <input
+              required
+              [type]="mostrarConfirmarSenha ? 'text' : 'password'"
+              minlength="6"
+              maxlength="72"
+              [(ngModel)]="confirmarSenha"
+              name="confirmarSenha"
+              #confirmarSenhaControl="ngModel"
+              autocomplete="new-password"
+              [attr.aria-invalid]="campoInvalido('confirmarSenha') ? 'true' : 'false'"
+              aria-describedby="confirmar-senha-erro senha-hint"
+            />
+            <button
+              type="button"
+              class="password-visibility"
+              (click)="mostrarConfirmarSenha = !mostrarConfirmarSenha"
+              [attr.aria-label]="mostrarConfirmarSenha ? 'Ocultar senha' : 'Mostrar senha'"
+              [attr.aria-pressed]="mostrarConfirmarSenha"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>@if (!mostrarConfirmarSenha) { <path class="eye-slash" d="m4 4 16 16"/> }</svg>
+            </button>
+          </div>
+          @if (campoInvalido('confirmarSenha')) {
+            <span id="confirmar-senha-erro" class="signup-field-error" role="alert">
+              <svg class="field-error-icon" viewBox="0 0 20 20" aria-hidden="true"
+                ><circle cx="10" cy="10" r="9" fill="currentColor" /><text x="10" y="14" fill="currentColor" font-size="11" font-weight="700" text-anchor="middle">!</text></svg>
+              {{ erros['confirmarSenha'] }}
+            </span>
+          }
+        </label>
+      </div>
+      <p id="senha-hint" class="signup-hint">A senha precisa ter no mínimo 6 caracteres.</p>
+
+      <!-- Área de feedback: anúncios para leitores de tela (aria-live) -->
+      <div
+        id="signup-feedback"
+        class="signup-feedback"
+        aria-live="polite"
+        [attr.aria-hidden]="!mensagemResultado() && resultado?.status !== 'confirmation_required' ? 'true' : 'false'"
+      >
+        @if (resultado?.status === 'confirmation_required') {
+          <div class="signup-confirm" role="status">
+            <svg class="signup-confirm__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 16.17l7.59-7.59L19 10l-7 7z" />
+            </svg>
+            <h2 class="signup-confirm__title">Conta criada!</h2>
+            <div class="signup-email-alert" role="alert">
+              <strong>Verifique seu e-mail</strong>
+              <p>Verifique seu e-mail e clique no link de confirmação para continuar seu cadastro no ChArte.</p>
+            </div>
+            <p class="signup-confirm__email">
+              Enviamos um link de confirmação para
+              @if (resultado?.status === 'confirmation_required') {
+                <strong>{{ emailConfirmacao() ?? '' }}</strong>.
+              }
+            </p>
+            <p class="signup-confirm__hint">
+              Não recebeu? Verifique a pasta de spam e lixo eletrônico.
+            </p>
+
+            @if (feedbackReenvio) {
+              <div
+                class="signup-confirm__feedback"
+                [class.signup-confirm__feedback--erro]="feedbackReenvio.ehErro"
+                role="status"
+              >
+                {{ feedbackReenvio.mensagem }}
+              </div>
+            }
+
+            <div class="signup-confirm__actions">
+              <button
+                type="button"
+                class="signup-resend"
+                [disabled]="reenviando"
+                (click)="reenviarConfirmacao()"
+                [attr.aria-busy]="reenviando ? 'true' : 'false'"
+              >
+                <span class="signup-resend__label">{{
+                  reenviando ? 'Reenviando…' : 'Reenviar confirmação'
+                }}</span>
+              </button>
+              <button
+                type="button"
+                class="signup-back"
+                [disabled]="reenviando"
+                (click)="irParaLogin()"
+              >
+                Ir para o login
+              </button>
+            </div>
+          </div>
+        }
+
+        @if (resultado && resultado.status !== 'confirmation_required') {
+          <div class="signup-banner" [class.signup-banner--erro]="tipoResultado() === 'erro'" [class.signup-banner--atencao]="tipoResultado() === 'atencao'" role="alert">
+            <svg class="signup-banner__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              @if (resultado.status === 'rate_limited') {
+                <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+              } @else {
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
+              }
+            </svg>
+            <div class="signup-banner__content">
+              <p class="signup-banner__text">{{ mensagemResultado() }}</p>
+              @if (acoesResultado().length) {
+                <div class="signup-banner__actions">
+                  @for (acao of acoesResultado(); track acao.label) {
+                    <button
+                      type="button"
+                      class="signup-banner__action"
+                      (click)="acao.action()"
+                    >
+                      {{ acao.label }}
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (resultado?.status !== 'confirmation_required') {
+        <button
+          class="signup-submit"
+          type="submit"
+          [disabled]="carregando"
+          [attr.aria-busy]="carregando ? 'true' : 'false'"
+        >
+          <ng-container>{{ carregando ? 'Criando conta…' : 'Criar conta' }}</ng-container>
+        </button>
+      }
+    </form>
+
+    <footer class="signup-footer">
+      <span>Já tem uma conta?</span>
+      <a routerLink="/">Entrar</a>
+    </footer>
+  </section>
+</main>

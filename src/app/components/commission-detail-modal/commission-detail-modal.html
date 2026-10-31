@@ -1,0 +1,23 @@
+<div class="commission-modal-backdrop" role="presentation" (click)="fechar.emit()">
+  <section class="commission-modal" role="dialog" aria-modal="true" aria-labelledby="commission-modal-title" (click)="$event.stopPropagation()">
+    <button class="commission-modal-close" type="button" aria-label="Fechar" (click)="fechar.emit()">×</button>
+    <span class="commission-modal-eyebrow">DETALHES DA COMISSÃO #{{ comissao.id }}</span>
+    <h2 id="commission-modal-title">{{ comissao.titulo }}</h2>
+    <div class="commission-modal-grid">
+      <div><span>Cliente</span><strong>{{ comissao.cliente.nome }} · @{{ comissao.cliente.username }}</strong></div>
+      <div><span>Valor</span><strong>{{ comissao.valor | currency:'BRL' }}</strong></div>
+      <div><span>Prazo</span><strong>{{ comissao.propostaPrazo || comissao.prazo }}</strong></div>
+      <div><span>Status da comissão</span><strong>{{ comissao.status }}</strong></div>
+      <div><span>Pagamento</span><strong class="payment-status" [class.paid]="pagamentoPago">{{ pagamentoPago ? 'Pago' : comissao.pagamentoStatus === 'falhou' ? 'Pagamento recusado' : 'Aguardando pagamento' }}</strong></div>
+      <div><span>Forma de pagamento</span><strong>{{ comissao.pagamento || 'A combinar' }}</strong></div>
+    </div>
+    <h3>Descrição</h3><p class="commission-description">{{ comissao.descricao }}</p>
+    @if (comissao.referencias.length) { <h3>Referências</h3><div class="commission-references">@for (referencia of comissao.referencias; track referencia) { @if (referencia.startsWith('data:image') || referencia.startsWith('blob:')) { <img [src]="referencia" alt="Referência do cliente" /> } @else { <a [href]="referencia" target="_blank" rel="noopener">Abrir referência ↗</a> } }</div> }
+    @if (!pagamentoPago) { <p class="payment-warning">Você poderá iniciar a produção e enviar a arte depois que o pagamento for confirmado.</p> }
+    <footer>
+      <button class="secondary-button" type="button" (click)="fechar.emit()">Fechar</button>
+      @if (comissao.status === 'Pendente') { <button class="primary-button" type="button" [disabled]="!pagamentoPago" (click)="iniciar.emit()">Iniciar comissão</button> }
+      @if (comissao.status === 'Em andamento') { <button class="primary-button" type="button" [disabled]="!pagamentoPago" (click)="enviar.emit()">Enviar comissão</button> }
+    </footer>
+  </section>
+</div>

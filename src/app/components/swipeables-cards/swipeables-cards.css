@@ -1,0 +1,38 @@
+.swipeablesCards {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-evenly;
+
+  width: 100%;
+  overflow-x: scroll;
+  overflow-y: hidden;
+
+  background-color: var(--trp);
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.swipeablesCards:active {
+  cursor: grabbing;
+}
+.swipeablesCards::-webkit-scrollbar {
+  display: none;
+}
+
+.catalogueSelector {
+  display: flex;
+  width: 100%;
+  flex: 1 1 0;
+
+  background-color: salmon;
+  background-color: var(--trp);
+
+  flex-wrap: nowrap;
+  justify-content: space-evenly;
+
+  overflow-x: scroll;
+  overflow-y: hidden;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}

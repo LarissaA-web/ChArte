@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    hikari:
+      initialization-fail-timeout: 1
+
+charte:
+  payment:
+    provider: ${PAYMENT_PROVIDER:}

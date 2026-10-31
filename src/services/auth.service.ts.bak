@@ -1,0 +1,368 @@
+import { Injectable } from '@angular/core';
+import { BehaviorSubject, Observable, from, map, switchMap, of } from 'rxjs';
+import { MOCK_USUARIOS, UsuarioMock, TipoUsuario } from '../app/mocks/usuarios.mock';
+import { PerfilService } from './perfil.service';
+import { supabase } from '../app/core/supabase/supabase.client';
+
+export interface SessaoUsuario {
+  idUsuario: string;
+  nomeUsuario: string;
+  tipoUsuario: TipoUsuario;
+  nome: string;
+  nomeArtistico?: string;
+  fotoPerfil: string;
+}
+
+const STORAGE_CADASTROS = 'charte:usuarios-cadastrados:v1';
+const STORAGE_CONTAS_EXCLUIDAS = 'charte:contas-excluidas:v1';
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private usuarioLogadoSubject = new BehaviorSubject<SessaoUsuario | null>(null);
+  usuarioLogado$: Observable<SessaoUsuario | null> = this.usuarioLogadoSubject.asObservable();
+  private inicializado = false;
+  private inicializacaoPromise: Promise<void> | null = null;
+
+  constructor(private perfis: PerfilService) {
+    this.inicializacaoPromise = this.inicializarSessao();
+  }
+
+  private async inicializarSessao(): Promise<void> {
+    if (this.inicializado) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await this.carregarPerfilESessao(session.user);
+    }
+
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        await this.carregarPerfilESessao(session.user);
+      } else if (event === 'SIGNED_OUT') {
+        this.usuarioLogadoSubject.next(null);
+      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+        await this.carregarPerfilESessao(session.user);
+      }
+    });
+
+    this.inicializado = true;
+  }
+
+  private async carregarPerfilESessao(user: { id: string; email?: string }): Promise<void> {
+    try {
+      const { data: usuarioDb, error } = await supabase
+        .from('usuario')
+        .select('id_usuario, nome_usuario, nome, data_nascimento, genero, telefone, tipo_usuario, foto_perfil, id_auth')
+        .eq('id_auth', user.id)
+        .single();
+
+      if (error || !usuarioDb) {
+        console.warn('Perfil não encontrado para usuário autenticado:', user.id);
+        this.usuarioLogadoSubject.next(null);
+        return;
+      }
+
+      let nomeArtistico: string | undefined;
+      if (usuarioDb.tipo_usuario === 'Artista') {
+        const { data: artistaDb } = await supabase
+          .from('artista')
+          .select('nome_artistico')
+          .eq('id_usuario', usuarioDb.id_usuario)
+          .single();
+        nomeArtistico = artistaDb?.nome_artistico;
+      }
+
+      const sessao: SessaoUsuario = {
+        idUsuario: usuarioDb.id_usuario.toString(),
+        nomeUsuario: usuarioDb.nome_usuario,
+        tipoUsuario: this.converterTipoParaFrontend(usuarioDb.tipo_usuario),
+        nome: usuarioDb.nome,
+        nomeArtistico,
+        fotoPerfil: usuarioDb.foto_perfil || '/gato.jpeg',
+      };
+
+      this.usuarioLogadoSubject.next(sessao);
+    } catch (err) {
+      console.error('Erro ao carregar perfil da sessão:', err);
+      this.usuarioLogadoSubject.next(null);
+    }
+  }
+
+  private converterTipoParaBanco(tipo: TipoUsuario): string {
+    return tipo === 'Comum' ? 'Cliente' : tipo;
+  }
+
+  private converterTipoParaFrontend(tipoBanco: string): TipoUsuario {
+    return tipoBanco === 'Cliente' ? 'Comum' : (tipoBanco as TipoUsuario);
+  }
+
+  async aguardarInicializacao(): Promise<void> {
+    if (this.inicializacaoPromise) {
+      await this.inicializacaoPromise;
+    }
+  }
+
+  async login(identificador: string, senha: string, tipoEsperado?: TipoUsuario): Promise<boolean> {
+    try {
+      const ident = identificador.trim();
+      let email = ident;
+
+      if (!ident.includes('@')) {
+        const { data: emailResolvido, error: rpcError } = await supabase.rpc('get_email_by_username', {
+          p_nome_usuario: ident,
+        });
+        if (rpcError || !emailResolvido) {
+          console.warn('Usuário não encontrado:', ident);
+          return false;
+        }
+        email = emailResolvido;
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password: senha,
+      });
+
+      if (error || !data.user || !data.session) {
+        console.warn('Login falhou:', error?.message);
+        return false;
+      }
+
+      if (tipoEsperado) {
+        const { data: usuarioDb } = await supabase
+          .from('usuario')
+          .select('tipo_usuario')
+          .eq('id_auth', data.user.id)
+          .single();
+        if (usuarioDb && this.converterTipoParaFrontend(usuarioDb.tipo_usuario) !== tipoEsperado) {
+          await supabase.auth.signOut();
+          return false;
+        }
+      }
+
+      await this.carregarPerfilESessao(data.user);
+      return this.usuarioLogadoSubject.value !== null;
+    } catch (err) {
+      console.error('Erro no login:', err);
+      return false;
+    }
+  }
+
+  async registrar(dados: {
+    nome: string;
+    nomeUsuario: string;
+    email: string;
+    senha: string;
+    tipoUsuario: TipoUsuario;
+    nomeArtistico?: string;
+    dataNascimento: string;
+    genero: string;
+    telefone: string;
+  }): Promise<SessaoUsuario | null> {
+    const nomeUsuario = dados.nomeUsuario.trim().replace(/^@/, '');
+    const email = dados.email.trim().toLowerCase();
+    const telefoneLimpo = dados.telefone.replace(/\D/g, '');
+
+    
+if (!/^[a-zA-Z0-9_.]{3,24}$/.test(nomeUsuario)) {
+  console.error('Cadastro inválido: nome de usuário deve ter 3 a 24 caracteres e usar apenas letras, números, _ ou .');
+  return null;
+}
+
+if (dados.senha.length < 6) {
+  console.error('Cadastro inválido: senha com menos de 6 caracteres.');
+  return null;
+}
+
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  console.error('Cadastro inválido: e-mail.');
+  return null;
+}
+
+if (!dados.dataNascimento || !dados.genero) {
+  console.error('Cadastro inválido: data de nascimento ou gênero ausente.');
+  return null;
+}
+
+if (telefoneLimpo.length < 10 || telefoneLimpo.length > 11) {
+  console.error('Cadastro inválido: telefone deve ter 10 ou 11 dígitos.');
+  return null;
+}
+
+if (dados.tipoUsuario === 'Artista' && !dados.nomeArtistico?.trim()) {
+  console.error('Cadastro inválido: nome artístico ausente.');
+  return null;
+}
+
+const generosValidos = [
+  'Feminino',
+  'Masculino',
+  'Gênero Fluido',
+  'Não Binário',
+  'Não Informado',
+  'Outro',
+];
+
+if (!generosValidos.includes(dados.genero)) {
+  console.error('Cadastro inválido: gênero não corresponde às opções aceitas.', dados.genero);
+  return null;
+}
+
+const hoje = new Date();
+const nascimento = new Date(`${dados.dataNascimento}T00:00:00`);
+let idade = hoje.getFullYear() - nascimento.getFullYear();
+
+if (
+  hoje.getMonth() < nascimento.getMonth() ||
+  (hoje.getMonth() === nascimento.getMonth() &&
+    hoje.getDate() < nascimento.getDate())
+) {
+  idade--;
+}
+
+if (
+  !Number.isFinite(nascimento.getTime()) ||
+  idade < 13 ||
+  nascimento > hoje
+) {
+  console.error('Cadastro inválido: data de nascimento ou idade.');
+  return null;
+}
+
+    if (dados.tipoUsuario === 'Artista' && !dados.nomeArtistico?.trim()) {
+
+    const tipoUsuarioBanco = this.converterTipoParaBanco(dados.tipoUsuario);
+	console.log('METADADOS DO CADASTRO', {
+  nome: dados.nome.trim(),
+  nomeUsuario,
+  nomeArtistico: dados.tipoUsuario === 'Artista'
+    ? dados.nomeArtistico?.trim()
+    : null,
+  dataNascimento: dados.dataNascimento,
+  genero: dados.genero,
+  telefone: telefoneLimpo,
+  tipoUsuario: tipoUsuarioBanco
+});
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: dados.senha,
+      options: {
+        data: {
+          nome: dados.nome.trim(),
+          nomeUsuario,
+          nomeArtistico: dados.tipoUsuario === 'Artista' ? dados.nomeArtistico?.trim() : undefined,
+          dataNascimento: dados.dataNascimento,
+          genero: dados.genero,
+          telefone: telefoneLimpo,
+          tipoUsuario: tipoUsuarioBanco,
+        },
+      },
+    });
+
+    if (error) {
+      console.error('Erro no cadastro Supabase:', error);
+      return null;
+    }
+
+    if (!data.user) {
+      return null;
+    }
+
+    if (data.session) {
+      await this.carregarPerfilESessao(data.user);
+      return this.usuarioLogadoSubject.value;
+    }
+
+    return null;
+  }
+
+  async logout(): Promise<void> {
+    await supabase.auth.signOut();
+    this.usuarioLogadoSubject.next(null);
+  }
+
+  getUsuarioLogado(): SessaoUsuario | null {
+    return this.usuarioLogadoSubject.value;
+  }
+
+  obterEmailUsuarioLogado(): string {
+    const sessao = this.usuarioLogadoSubject.value;
+    if (!sessao) return '';
+    return '';
+  }
+
+  estaLogado(): boolean {
+    return this.usuarioLogadoSubject.value !== null;
+  }
+
+  async atualizarEmail(email: string): Promise<boolean> {
+    const { error } = await supabase.auth.updateUser({ email });
+    return !error;
+  }
+
+  async atualizarSenha(novaSenha: string): Promise<boolean> {
+    const { error } = await supabase.auth.updateUser({ password: novaSenha });
+    return !error;
+  }
+
+  async atualizarFotoPerfil(fotoPerfil: string): Promise<void> {
+    const sessao = this.usuarioLogadoSubject.value;
+    if (!sessao) return;
+
+    const { error } = await supabase
+      .from('usuario')
+      .update({ foto_perfil: fotoPerfil })
+      .eq('id_usuario', Number(sessao.idUsuario));
+
+    if (!error) {
+      const atualizada = { ...sessao, fotoPerfil };
+      this.usuarioLogadoSubject.next(atualizada);
+    }
+  }
+
+  async atualizarUsername(username: string): Promise<boolean> {
+    const sessao = this.usuarioLogadoSubject.value;
+    if (!sessao) return false;
+
+    const nome = username.trim().replace(/^@/, '');
+    if (!/^[a-zA-Z0-9_.]{3,24}$/.test(nome)) return false;
+
+    const { error } = await supabase
+      .from('usuario')
+      .update({ nome_usuario: nome })
+      .eq('id_usuario', Number(sessao.idUsuario));
+
+    if (!error) {
+      const atualizada = { ...sessao, nomeUsuario: nome };
+      this.usuarioLogadoSubject.next(atualizada);
+      return true;
+    }
+    return false;
+  }
+
+  private contasExcluidas(): Set<string> {
+    try {
+      const dados = localStorage.getItem(STORAGE_CONTAS_EXCLUIDAS);
+      const ids = dados ? (JSON.parse(dados) as unknown) : [];
+      return new Set(
+        Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [],
+      );
+    } catch {
+      return new Set();
+    }
+  }
+
+  excluirContaLogada(): boolean {
+    const sessao = this.usuarioLogadoSubject.value;
+    if (!sessao) return false;
+
+    const excluidas = this.contasExcluidas();
+    excluidas.add(sessao.idUsuario);
+    try {
+      localStorage.setItem(STORAGE_CONTAS_EXCLUIDAS, JSON.stringify([...excluidas]));
+    } catch {
+    }
+    this.logout();
+    return true;
+  }
+}

@@ -1,0 +1,74 @@
+:host { display: block; flex: 0 0 250px; }
+
+.card {
+  position: relative;
+  display: flex;
+  width: 250px;
+  height: 150px;
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  padding: 16px 18px;
+  color: #fff;
+  text-decoration: none;
+  background:
+    radial-gradient(ellipse at 82% 18%, rgba(204, 127, 255, .3), transparent 48%),
+    linear-gradient(140deg, #332446, #1c1a2b 72%);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.22);
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+.card::before {
+  position: absolute;
+  top: -28px;
+  right: -16px;
+  width: 118px;
+  height: 118px;
+  content: '';
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 50%;
+  box-shadow: 0 0 0 12px rgba(255,255,255,.025), 0 0 0 25px rgba(255,255,255,.02);
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(220,175,255,.55);
+  box-shadow: 0 12px 28px rgba(90,35,130,.28);
+}
+
+.card-abbreviation {
+  position: absolute;
+  bottom: 9px;
+  left: 0;
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+  color: rgba(255,255,255,.38);
+  font-size: clamp(42px, 5vw, 64px);
+  font-weight: 900;
+  letter-spacing: .04em;
+  line-height: 1;
+  text-overflow: clip;
+  white-space: nowrap;
+  transform: none;
+  text-shadow: 0 3px 18px rgba(255,255,255,.08);
+  pointer-events: none;
+}
+
+.card-category {
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+  color: rgba(255,255,255,.94);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-shadow: 0 2px 8px rgba(0,0,0,.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card { transition: none; }
+}

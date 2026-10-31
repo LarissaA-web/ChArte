@@ -1,0 +1,25 @@
+@if ((modalService.modalOpen$ | async) === 'editProfile' && isOwner) {
+  <div class="modal-overlay" (click)="fechar()">
+    <div class="container-edit-profile" (click)="$event.stopPropagation()">
+      <header class="edit-header">
+        <h2>Editar Perfil</h2>
+        <button type="button" class="close-btn" (click)="fechar()" aria-label="Fechar">×</button>
+      </header>
+      <form class="edit-form" (submit)="$event.preventDefault(); salvar()">
+        <div class="form-group"><label for="edit-nome">Nome</label><input id="edit-nome" type="text" [(ngModel)]="nome" name="nome" placeholder="Seu nome completo ou social" /></div>
+        @if (perfil?.tipoUsuario === 'Artista') { <div class="form-group"><label for="edit-artistico">Nome artístico</label><input id="edit-artistico" type="text" [(ngModel)]="nomeArtistico" name="nomeArtistico" placeholder="Ex.: Muzzle Art" /></div> }
+        <div class="form-group"><label for="edit-bio">Biografia</label><textarea id="edit-bio" rows="3" [(ngModel)]="bio" name="bio" placeholder="Conte um pouco sobre você..."></textarea></div>
+        <section class="image-fields"><label for="edit-foto">Foto de perfil</label><img class="image-preview avatar-preview" [src]="fotoPerfil" alt="Prévia da foto de perfil" /><input id="edit-foto" type="file" accept="image/*" (change)="selecionarImagem($event, 'foto')" /></section>
+        <section class="image-fields"><label for="edit-banner">Banner</label><img class="image-preview banner-preview" [src]="banner" alt="Prévia do banner" /><input id="edit-banner" type="file" accept="image/*" (change)="selecionarImagem($event, 'banner')" /></section>
+        @if (erroImagem) { <p class="image-error" role="alert">{{ erroImagem }}</p> }
+        <div class="social-section"><h3>Redes Sociais</h3>
+          <div class="form-group"><label for="edit-x">X / Twitter</label><input id="edit-x" type="text" [(ngModel)]="twitter" name="twitter" placeholder="@seu_usuario" /></div>
+          <div class="form-group"><label for="edit-insta">Instagram</label><input id="edit-insta" type="text" [(ngModel)]="instagram" name="instagram" placeholder="@seu_usuario" /></div>
+          <div class="form-group"><label for="edit-tiktok">TikTok</label><input id="edit-tiktok" type="text" [(ngModel)]="tiktok" name="tiktok" placeholder="@seu_usuario" /></div>
+          <div class="form-group"><label for="edit-youtube">YouTube</label><input id="edit-youtube" type="text" [(ngModel)]="youtube" name="youtube" placeholder="@seu_canal" /></div>
+        </div>
+        <div class="actions"><button type="button" class="btn-cancelar" (click)="fechar()">Cancelar</button><button type="submit" class="btn-salvar">Salvar Alterações</button></div>
+      </form>
+    </div>
+  </div>
+}

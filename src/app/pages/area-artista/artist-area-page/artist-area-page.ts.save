@@ -1,0 +1,120 @@
+
+import { Component, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
+import { ArtistArea } from '../artist-area/artist-area';
+import { AuthService } from '../../../../services/auth.service';
+import { PerfilService } from '../../../../services/perfil.service';
+import { PinService } from '../../../../services/pinService';
+import { PerfilView } from '../../../models/perfil';
+import { Post } from '../../../models/post';
+
+@Component({
+  selector: 'app-artist-area-page',
+  standalone: true,
+  imports: [ArtistArea],
+  template: `
+    @if (carregando) {
+      <main class="artist-area-loading">
+        <p>Carregando área do artista…</p>
+      </main>
+    } @else if (erroCarregamento) {
+      <main class="artist-area-loading">
+        <section class="mensagem-erro">
+          <h2>Não foi possível carregar sua área</h2>
+          <p>
+            Não encontramos seu perfil de artista ou ocorreu
+            um problema ao consultar seus dados.
+          </p>
+          <button type="button" (click)="voltarInicio()">
+            Voltar ao início
+          </button>
+        </section>
+      </main>
+    } @else if (perfil) {
+      <app-artist-area
+        [perfil]="perfil"
+        [artes]="artes"
+        (perfilAtualizado)="atualizarPerfil($event)"
+        (artesAtualizadas)="atualizarArtes($event)"
+      />
+    }
+  `,
+  styles: [`
+    .artist-area-loading {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: #141116;
+      padding: 24px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+
+    .mensagem-erro {
+      max-width: 420px;
+    }
+
+    .mensagem-erro button {
+      margin-top: 12px;
+      padding: 10px 18px;
+      border: 0;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  `],
+})
+export class ArtistAreaPage implements OnInit {
+  perfil: PerfilView | null = null;
+  artes: Post[] = [];
+
+  carregando = true;
+  erroCarregamento = false;
+
+  constructor(
+    private auth: AuthService,
+    private perfis: PerfilService,
+    private pins: PinService,
+    private router: Router,
+  ) {}
+
+ async ngOnInit(): Promise<void> {
+  try {
+    console.log('[Área artista] Iniciando autenticação');
+
+    await this.auth.aguardarInicializacao();
+
+    console.log('[Área artista] Autenticação inicializada');
+
+    const usuario = this.auth.getUsuarioLogado();
+
+    console.log('[Área artista] Usuário logado:', usuario);
+console.log('[Área artista] Tipo de usuário:', usuario?.tipoUsuario);
+console.log('[Área artista] Nome de usuário:', usuario?.nomeUsuario);
+
+    if (!usuario) {
+      this.carregando = false;
+      await this.router.navigate(['/']);
+     
+  voltarInicio(): void {
+    void this.router.navigate(['/']);
+  }
+
+  atualizarPerfil(perfil: PerfilView): void {
+    this.perfil = perfil;
+
+    this.pins.getArtesPorArtista(perfil.nomeUsuario).subscribe({
+      next: (artes) => {
+        this.artes = artes;
+      },
+      error: (erro) => {
+        console.error('Erro ao atualizar artes:', erro);
+      },
+    });
+  }
+
+  atualizarArtes(artes: Post[]): void {
+    this.artes = [...artes];
+  }
+}
+

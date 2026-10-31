@@ -1,0 +1,400 @@
+#artist-area-root .artist-area {
+  width: 100%;
+  min-width: 0;
+}
+#artist-area-root .area-heading,
+#artist-area-root .section-heading,
+#artist-area-root .dashboard-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+#artist-area-root .area-heading {
+  margin-bottom: 24px;
+}
+#artist-area-root .eyebrow {
+  color: #c084fc;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+#artist-area-root .area-heading h1 {
+  margin: 5px 0 4px;
+  font-size: clamp(27px, 3.3vw, 35px);
+}
+#artist-area-root .area-heading p,
+#artist-area-root .section-heading p,
+#artist-area-root .dashboard-heading p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 16px;
+  line-height: 1.5;
+}
+#artist-area-root .artist-chip,
+#artist-area-root .period-chip {
+  padding: 7px 12px;
+  color: #d6b0fa;
+  background: rgba(155, 36, 232, 0.13);
+  border: 1px solid rgba(155, 36, 232, 0.27);
+  border-radius: 20px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+#artist-area-root .area-nav,
+#artist-area-root .settings-nav {
+  display: flex;
+  gap: 20px;
+  margin: 0 0 24px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  scrollbar-width: none;
+}
+#artist-area-root .area-nav::-webkit-scrollbar,
+#artist-area-root .settings-nav::-webkit-scrollbar {
+  display: none;
+}
+#artist-area-root .area-nav button,
+#artist-area-root .settings-nav button {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 12px 3px 14px;
+  color: rgba(255, 255, 255, 0.62);
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+#artist-area-root .area-nav button.active,
+#artist-area-root .settings-nav button.active {
+  color: white;
+}
+#artist-area-root .area-nav button.active::after,
+#artist-area-root .settings-nav button.active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  content: '';
+  background: #9b24e8;
+  border-radius: 4px 4px 0 0;
+}
+#artist-area-root .area-section {
+  min-width: 0;
+}
+#artist-area-root .section-heading {
+  margin: 2px 0 18px;
+}
+#artist-area-root .section-heading h2,
+#artist-area-root .dashboard-heading h2 {
+  margin: 0 0 5px;
+  font-size: 23px;
+}
+#artist-area-root .works-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 18px;
+}
+#artist-area-root .work-card,
+#artist-area-root .commission-card,
+#artist-area-root .review-card,
+#artist-area-root .settings-card {
+  min-width: 0;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 15px;
+}
+#artist-area-root .work-card app-pin-card {
+  display: block;
+  min-width: 0;
+}
+#artist-area-root .work-info {
+  padding: 14px;
+}
+#artist-area-root .work-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+#artist-area-root .work-title-row h3,
+#artist-area-root .commission-main h3,
+#artist-area-root .review-person h3 {
+  min-width: 0;
+  margin: 0;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+}
+#artist-area-root .work-status,
+#artist-area-root .status-pill {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  color: #cda8f3;
+  background: rgba(155, 36, 232, 0.14);
+  border-radius: 20px;
+  font-size: 12px;
+}
+#artist-area-root .work-status.sold {
+  color: #a8e4c0;
+  background: rgba(46, 180, 105, 0.13);
+}
+#artist-area-root .work-info > p {
+  margin: 8px 0 12px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 14px;
+}
+#artist-area-root .work-actions {
+  display: flex;
+  gap: 8px;
+}
+#artist-area-root .work-actions button,
+#artist-area-root .settings-action {
+  padding: 7px 12px;
+  color: white;
+  background: rgba(155, 36, 232, 0.2);
+  border: 1px solid rgba(155, 36, 232, 0.35);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+#artist-area-root .work-actions .text-action {
+  color: rgba(255, 255, 255, 0.65);
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+#artist-area-root .filter-row {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding-bottom: 4px;
+  overflow-x: auto;
+}
+#artist-area-root .filter-row button {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+#artist-area-root .filter-row button.active {
+  color: white;
+  background: rgba(155, 36, 232, 0.2);
+  border-color: rgba(155, 36, 232, 0.45);
+}
+#artist-area-root .commission-list,
+#artist-area-root .review-list {
+  display: grid;
+  gap: 10px;
+}
+#artist-area-root .commission-card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 14px;
+}
+#artist-area-root .commission-avatar,
+#artist-area-root .review-avatar {
+  display: grid;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  color: #ead8fa;
+  background: rgba(155, 36, 232, 0.2);
+  border-radius: 50%;
+  font-weight: 600;
+}
+#artist-area-root .commission-main {
+  flex: 1;
+  min-width: 0;
+}
+#artist-area-root .commission-main p {
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 14px;
+}
+#artist-area-root .commission-value {
+  color: white;
+  font-size: 15px;
+  white-space: nowrap;
+}
+#artist-area-root .reviews-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 0 18px;
+}
+#artist-area-root .reviews-summary strong {
+  color: #ffbf4a;
+  font-size: 30px;
+}
+#artist-area-root .reviews-summary span {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 15px;
+}
+#artist-area-root .rating-bars {
+  display: grid;
+  gap: 8px;
+  max-width: 520px;
+  margin-bottom: 22px;
+}
+#artist-area-root .rating-row {
+  display: grid;
+  grid-template-columns: 44px minmax(50px, 1fr) 24px;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+}
+#artist-area-root .rating-row small {
+  color: rgba(255, 255, 255, 0.5);
+}
+#artist-area-root .rating-track {
+  height: 7px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+#artist-area-root .rating-track span {
+  display: block;
+  height: 100%;
+  background: #9b24e8;
+  border-radius: inherit;
+}
+#artist-area-root .review-card {
+  padding: 16px;
+}
+#artist-area-root .review-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#artist-area-root .review-person h3 {
+  margin-bottom: 3px;
+}
+#artist-area-root .stars {
+  color: #ffbf4a;
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+#artist-area-root .review-card > p {
+  margin: 13px 0 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 15px;
+  line-height: 1.55;
+}
+#artist-area-root .settings-nav {
+  gap: 18px;
+  margin-top: 5px;
+}
+#artist-area-root .settings-card {
+  padding: 18px;
+}
+#artist-area-root .settings-card > h3 {
+  margin: 0 0 5px;
+  font-size: 19px;
+}
+#artist-area-root .settings-card > p {
+  margin: 0 0 14px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 14px;
+  line-height: 1.5;
+}
+#artist-area-root .toggle-row,
+#artist-area-root .account-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+#artist-area-root .toggle-row > span {
+  display: grid;
+  gap: 4px;
+}
+#artist-area-root .toggle-row strong,
+#artist-area-root .account-line span {
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 15px;
+}
+#artist-area-root .toggle-row small {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  line-height: 1.4;
+}
+#artist-area-root .toggle-row input {
+  width: 38px;
+  height: 21px;
+  flex: 0 0 auto;
+  accent-color: #9b24e8;
+  cursor: pointer;
+}
+#artist-area-root .account-line strong {
+  max-width: 65%;
+  overflow-wrap: anywhere;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: right;
+}
+#artist-area-root .settings-action {
+  margin: 0 8px 0 0;
+}
+#artist-area-root .settings-note {
+  margin: 13px 0 0 !important;
+}
+#artist-area-root .empty-state {
+  padding: 40px 18px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 15px;
+}
+#artist-area-root .empty-state > span {
+  font-size: 35px;
+}
+#artist-area-root .empty-state h3 {
+  margin: 10px 0 6px;
+  font-size: 19px;
+}
+#artist-area-root .empty-state p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 15px;
+}
+@media (max-width: 620px) {
+  #artist-area-root .area-heading {
+    align-items: flex-start;
+  }
+  #artist-area-root .artist-chip {
+    display: none;
+  }
+  #artist-area-root .area-nav {
+    gap: 16px;
+    margin-right: -15px;
+  }
+  #artist-area-root .commission-card {
+    flex-wrap: wrap;
+  }
+  #artist-area-root .commission-value {
+    margin-left: 50px;
+  }
+  #artist-area-root .status-pill {
+    margin-left: auto;
+  }
+  #artist-area-root .toggle-row,
+  #artist-area-root .account-line {
+    align-items: flex-start;
+  }
+}

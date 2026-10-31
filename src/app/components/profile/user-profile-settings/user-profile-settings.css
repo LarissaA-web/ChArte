@@ -1,0 +1,68 @@
+:host { display: block; min-height: 100vh; background: #151217; color: #f8f5fa; }
+.settings-shell { display: grid; grid-template-columns: 270px minmax(0,1fr); min-height: 100vh; }
+.settings-sidebar { position: sticky; top: 0; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; padding: 28px 18px; border-right: 1px solid #342b38; background: #1c1720; }
+.back-link { color: #c89add; text-decoration: none; font-size: 12px; font-weight: 650; }
+.back-link:hover { color: #f0d7ff; }
+.sidebar-title { margin: 34px 10px 24px; }
+.eyebrow { color: #c184df; font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+.sidebar-title h1 { margin: 7px 0 0; font-size: 22px; }
+.settings-sidebar nav { display: grid; gap: 6px; }
+.settings-sidebar nav button { display: flex; align-items: center; gap: 11px; width: 100%; padding: 12px 11px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #c5bac9; text-align: left; font: inherit; font-size: 13px; cursor: pointer; }
+.settings-sidebar nav button span { width: 18px; text-align: center; font-size: 16px; }
+.settings-sidebar nav button:hover { background: rgba(255,255,255,.05); color: #fff; }
+.settings-sidebar nav button.active { border-color: #684676; background: rgba(164,71,210,.15); color: #f5e8fa; }
+.settings-sidebar nav button.delete-nav { color: #e29aa5; }
+.settings-sidebar nav button.delete-nav.active { border-color: rgba(209,78,99,.4); background: rgba(141,41,57,.2); }
+.settings-content { width: 100%; max-width: 1000px; box-sizing: border-box; padding: 48px clamp(22px,5vw,64px) 80px; }
+.settings-heading { margin: 0 0 22px; }
+.settings-heading h2 { margin: 7px 0 5px; font-size: 25px; }
+.settings-heading p, .card-heading p, .settings-form p, .password-form p { margin: 0; color: #aaa0af; font-size: 13px; line-height: 1.5; }
+.settings-card { margin-bottom: 16px; padding: 22px; border: 1px solid #3b313f; border-radius: 15px; background: #211b25; }
+.account-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.account-summary div { display: grid; gap: 6px; min-width: 0; padding: 13px; border-radius: 9px; background: #19151c; }
+.account-summary span { color: #aaa0af; font-size: 11px; }
+.account-summary strong { overflow-wrap: anywhere; font-size: 13px; }
+.card-heading { margin-bottom: 12px; }
+.card-heading h3, .settings-form h3, .password-form h3 { margin: 0 0 5px; font-size: 16px; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 15px 0; border-top: 1px solid rgba(255,255,255,.08); cursor: pointer; }
+.toggle-row span { display: grid; gap: 4px; }
+.toggle-row strong { font-size: 13px; }
+.toggle-row small { color: #aaa0af; font-size: 12px; }
+.toggle-row input { width: 18px; height: 18px; accent-color: #a447d2; }
+.settings-actions { display: flex; justify-content: flex-end; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+.settings-form { display: grid; grid-template-columns:minmax(0,1fr) minmax(220px,1fr) auto; align-items: end; gap: 14px; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.settings-form label, .password-form label { display: grid; gap: 7px; color: #d7cdda; font-size: 12px; font-weight: 650; }
+.settings-form input, .password-form input { width: 100%; min-width: 0; box-sizing: border-box; padding: 11px 12px; border: 1px solid #514455; border-radius: 9px; outline: none; background: #19151c; color: #f8f5fa; font: inherit; font-size: 13px; }
+.settings-form input:focus, .password-form input:focus { border-color: #b76ad8; box-shadow: 0 0 0 2px #a447d233; }
+.password-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; padding-top: 20px; }
+.password-form header { grid-column: 1/-1; }
+.password-form button { justify-self: start; }
+.primary-action, .secondary-action { min-height: 39px; padding: 9px 14px; border-radius: 9px; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+.primary-action { border: 0; background: #a447d2; color: #fff; }
+.primary-action:hover { background: #b65add; }
+.secondary-action { border: 1px solid #5a4b60; background: transparent; color: #eee4f1; }
+.secondary-action:hover { background: rgba(255,255,255,.06); }
+.feedback { margin: 14px 0 0; font-size: 13px; }
+.error { color: #ff9da5; }
+.success { color: #a9e0b8; }
+.settings-loading { min-height: 100vh; display: grid; place-items: center; color: #aaa0af; }
+@media (max-width: 800px) {
+  .settings-shell { grid-template-columns: 220px minmax(0,1fr); }
+  .settings-sidebar { padding: 22px 12px; }
+  .settings-content { padding: 34px 22px 55px; }
+  .account-summary { grid-template-columns: 1fr; }
+  .settings-form { grid-template-columns: 1fr; }
+  .settings-form button { justify-self: start; }
+}
+@media (max-width: 600px) {
+  .settings-shell { display: flex; flex-direction: column; }
+  .settings-sidebar { position: static; height: auto; padding: 17px 16px 12px; border-right: 0; border-bottom: 1px solid #342b38; }
+  .sidebar-title { margin: 16px 2px 12px; }
+  .sidebar-title h1 { font-size: 20px; }
+  .settings-sidebar nav { display: flex; overflow-x: auto; }
+  .settings-sidebar nav button { width: auto; flex: 0 0 auto; padding: 10px; }
+  .settings-content { padding: 25px 16px 45px; }
+  .settings-card { padding: 17px; }
+  .password-form { grid-template-columns: 1fr; }
+  .password-form header { grid-column: auto; }
+}
