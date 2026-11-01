@@ -13,6 +13,7 @@ import { AsyncPipe } from '@angular/common';
 })
 export class SubMenu implements OnInit {
   tema: 'claro' | 'escuro' = 'escuro';
+  exibindoAjuda = false;
 
   constructor(
     public modal: ModalService,
@@ -48,7 +49,7 @@ export class SubMenu implements OnInit {
     this.modal.closeModal();
 
     if (usuario) {
-      this.router.navigate(['/perfil', usuario.nomeUsuario]);
+      void this.router.navigate(['/perfil', usuario.nomeUsuario]);
     } else {
       this.modal.openModal('login');
     }
@@ -58,9 +59,15 @@ export class SubMenu implements OnInit {
     this.modal.openChat();
   }
 
-  irParaCarrinho(): void {
+  irParaCarrinho(aba?: 'favoritos' | 'carrinho' | 'pedidos' | 'pagamentos' | 'seguindo'): void {
     this.modal.closeModal();
-    void this.router.navigate(['/carrinho']);
+    void this.router.navigate(['/carrinho'], {
+      queryParams: aba && aba !== 'favoritos' ? { aba } : {},
+    });
+  }
+
+  alternarAjuda(): void {
+    this.exibindoAjuda = !this.exibindoAjuda;
   }
 
   logout(): void {

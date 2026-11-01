@@ -13,3 +13,136 @@
 @media (max-width: 785px) {
   .orders-page .pin_container { columns: 2 auto; }
 }
+
+.orders-tabs {
+  flex-wrap: wrap;
+}
+
+.cart-summary-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: #251d2a;
+  border: 1px solid #483554;
+}
+
+.cart-summary-bar strong {
+  display: block;
+  font-size: 15px;
+}
+
+.cart-summary-bar span {
+  font-size: 13px;
+  color: #d69ff2;
+  font-weight: 700;
+}
+
+.cart-item-card,
+.followed-artist-card {
+  grid-template-columns: 64px 1fr auto;
+}
+
+.cart-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.cart-thumb.avatar-round {
+  border-radius: 50%;
+}
+
+.cart-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.cart-price {
+  font-size: 18px;
+  color: #f0d7ff;
+}
+
+.cart-btn-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-checkout-now {
+  padding: 9px 14px;
+  border-radius: 9px;
+  border: 0;
+  background: linear-gradient(135deg, #9b43cc, #73299e);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-remove-cart {
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid #6b3f47;
+  background: transparent;
+  color: #ffb8bd;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cart-error-banner {
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #422026;
+  color: #ffc2c7;
+  font-size: 13px;
+}
+
+.filter-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.filter-pills button {
+  padding: 7px 14px;
+  border-radius: 99px;
+  border: 1px solid #3f3445;
+  background: #1d1920;
+  color: #c2b6c8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.filter-pills button.active {
+  background: #482957;
+  border-color: #b465db;
+  color: #fff;
+}
+
+.order-status[data-tx-status="APPROVED"],
+.order-status[data-tx-status="PAID"] {
+  background: #1e3b2b;
+  color: #9cd7b0;
+}
+
+.order-status[data-tx-status="DECLINED"],
+.order-status[data-tx-status="FAILED"],
+.order-status[data-tx-status="CANCELLED"] {
+  background: #482526;
+  color: #ffaaaa;
+}
+
+.order-status[data-tx-status="REFUNDED"] {
+  background: #45371c;
+  color: #efce89;
+}
+

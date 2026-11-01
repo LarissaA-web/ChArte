@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { SwipeablesCards } from './swipeables-cards';
 
@@ -9,6 +10,7 @@ describe('SwipeablesCards', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [SwipeablesCards],
+      providers: [provideRouter([])],
     }).compileComponents();
 
     fixture = TestBed.createComponent(SwipeablesCards);

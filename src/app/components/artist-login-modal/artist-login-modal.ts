@@ -1,10 +1,9 @@
-import { Component, Output, EventEmitter } from '@angular/core';
+import { Component } from '@angular/core';
 import { ModalService } from '../../../services/modal.service';
 import { AsyncPipe } from '@angular/common';
 import { AuthService } from '../../../services/auth.service';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-artist-login-modal',
@@ -14,26 +13,41 @@ import { RouterLink } from '@angular/router';
   styleUrl: './artist-login-modal.css',
 })
 export class ArtistLoginModal {
+  email = '';
   nomeUsuario = '';
   senha = '';
   mostrarSenha = false;
+  mensagemErro = '';
+  carregando = false;
 
   constructor(
     public modal: ModalService,
     private authService: AuthService,
     private router: Router,
   ) {}
-  async entrar(): Promise<void> {
-    const sucesso = await this.authService.login(this.nomeUsuario, this.senha, 'Artista');
 
-    if (sucesso) {
-      this.modal.closeModal();
-      void this.router.navigate(['/']);
-    } else {
-      alert('Usuário ou senha incorretos para login de artista');
+  async entrar(): Promise<void> {
+    if (this.carregando) return;
+    const identificador = this.nomeUsuario.trim() || this.email.trim();
+    if (!identificador || !this.senha) {
+      this.mensagemErro = 'Informe seu usuário (ou e-mail) e senha.';
+      return;
+    }
+
+    this.carregando = true;
+    this.mensagemErro = '';
+    try {
+      const sucesso = await this.authService.login(identificador, this.senha, 'Artista');
+      if (sucesso) {
+        this.modal.closeModal();
+        void this.router.navigate(['/']);
+      } else {
+        this.mensagemErro = 'Credenciais inválidas para conta de artista.';
+      }
+    } finally {
+      this.carregando = false;
     }
   }
-
 
   openLogin() {
     this.modal.openModal('artistLogin');

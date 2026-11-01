@@ -1,20 +1,20 @@
 package br.com.charte.backend.payment;
 
-import java.net.URI;
-
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 
 @Configuration
-@Profile("dev & !prod")
-@EnableConfigurationProperties(DevPaymentProperties.class)
 public class PaymentProviderConfiguration {
-    @Bean
-    @ConditionalOnProperty(name = "charte.payment.provider", havingValue = "mock", matchIfMissing = true)
-    PaymentProvider mockPaymentProvider(DevPaymentProperties properties) {
-        return new MockPaymentProvider(URI.create(properties.checkoutBaseUrl()));
+
+    public PaymentProviderConfiguration(
+            @Value("${charte.payment.provider:mock}") String configuredProvider,
+            ObjectProvider<PaymentProvider> paymentProvider
+    ) {
+        if (paymentProvider.getIfAvailable() == null) {
+            throw new IllegalStateException(
+                    "Nenhum PaymentProvider ativo para charte.payment.provider=" + configuredProvider
+            );
+        }
     }
 }

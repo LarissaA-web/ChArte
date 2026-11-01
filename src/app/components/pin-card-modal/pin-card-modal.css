@@ -75,6 +75,61 @@
 .artist-card a { color: #d4a2f0; font-size: 13px; font-weight: 700; text-decoration: none; }
 .artist-card a:hover { color: #f0d7ff; }
 
+.artist-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.btn-follow-artist {
+  padding: 7px 14px;
+  border-radius: 99px;
+  border: 1px solid rgba(197, 141, 230, .45);
+  background: rgba(136, 80, 213, .28);
+  color: #f4e6ff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-follow-artist.following {
+  background: rgba(46, 107, 73, .35);
+  border-color: rgba(114, 210, 152, .5);
+  color: #bdf5d0;
+}
+
+.btn-cart-add {
+  padding: 12px 15px;
+  border-radius: 12px;
+  border: 1px solid rgba(205, 149, 238, .38);
+  background: rgba(255, 255, 255, .06);
+  color: #edd8fa;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-cart-add:hover {
+  background: rgba(177, 91, 218, .22);
+}
+
+.modal-purchase-feedback {
+  margin: 10px 0 0 5px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(46, 107, 73, .3);
+  color: #bdf5d0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.modal-purchase-feedback.error {
+  background: rgba(135, 44, 56, .35);
+  color: #ffc2c9;
+}
+
 .btn-buy {
   min-width: 118px;
   padding: 13px 22px;

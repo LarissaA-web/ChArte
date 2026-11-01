@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { SearchBar } from '../../components/search-bar/search-bar';
@@ -21,12 +21,19 @@ export class Category implements OnInit, OnDestroy {
   categoria = '';
   private routeSubscription?: Subscription;
 
-  constructor(private route: ActivatedRoute, private pinService: PinService) {}
+  constructor(
+    private route: ActivatedRoute,
+    private pinService: PinService,
+    private cdr: ChangeDetectorRef,
+  ) {}
 
   ngOnInit(): void {
     this.routeSubscription = this.route.paramMap.subscribe((params) => {
       this.categoria = params.get('categoria') ?? '';
-      this.pinService.buscarPorCategoria(this.categoria).subscribe((pins) => this.artes = pins);
+      this.pinService.buscarPorCategoria(this.categoria).subscribe((pins) => {
+        this.artes = pins;
+        this.cdr.detectChanges();
+      });
     });
   }
 

@@ -1,66 +1,201 @@
 package br.com.charte.backend.payment;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.charte.backend.testsupport.InMemoryCharteJdbcTemplate;
 import java.math.BigDecimal;
-import java.net.URI;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 class PaymentServiceSafetyTest {
-    @Test
-    void paidSimulationIsRejectedEvenWhenTriggerIsNotVisible() {
-        var jdbc = new StubJdbcTemplate(false);
-        var provider = new StubProvider();
-        PaymentService service = new PaymentService(jdbc, provider, "dev-secret", true);
+    private InMemoryCharteJdbcTemplate jdbcTemplate;
+    private PaymentService service;
 
-        assertThatThrownBy(() -> service.simulate("mock-id", PaymentStatus.PAID, "dev-secret", "auth-id"))
-                .isInstanceOf(ResponseStatusException.class)
-                .extracting(error -> ((ResponseStatusException) error).getStatusCode().value())
-                .isEqualTo(409);
-        assertThat(provider.used).isFalse();
-        assertThat(jdbc.queries).isEqualTo(1);
+    @BeforeEach
+    void setup() {
+        jdbcTemplate = new InMemoryCharteJdbcTemplate();
+        jdbcTemplate.addUser(1L, "auth_u1", "cliente1", "Cliente Um", false);
+        jdbcTemplate.addUser(2L, "auth_u2", "artista2", "Artista Dois", true);
+        jdbcTemplate.addUser(3L, "auth_u3", "intruso3", "Intruso Tres", false);
+        jdbcTemplate.addOrder(100L, 1L, 2L, new BigDecimal("150.00"), "Pendente", "Retrato Digital");
+
+        PaymentProvider provider = new MockPaymentProvider("http://localhost:4200/checkout");
+        service = new PaymentService(jdbcTemplate, provider, "segredo-dev");
     }
 
     @Test
-    void simulationIsUnavailableWhenTokenOrExplicitEnablementIsMissing() {
-        var jdbc = new StubJdbcTemplate(false);
-        var provider = new StubProvider();
-        PaymentService service = new PaymentService(jdbc, provider, "", false);
+    void deveReaproveitarCheckoutPendenteNoMesmoPedido() {
+        PaymentService.PaymentView first = service.checkout(
+                new PaymentService.CheckoutRequest(100L, "PIX"),
+                "auth_u1"
+        );
+        PaymentService.PaymentView second = service.checkout(
+                new PaymentService.CheckoutRequest(100L, "PIX"),
+                "auth_u1"
+        );
 
-        assertThatThrownBy(() -> service.simulate("mock-id", PaymentStatus.FAILED, null, "auth-id"))
-                .isInstanceOf(ResponseStatusException.class)
-                .extracting(error -> ((ResponseStatusException) error).getStatusCode().value())
-                .isEqualTo(404);
-        assertThat(jdbc.queries).isZero();
-        assertThat(provider.used).isFalse();
+        assertEquals(first.paymentId(), second.paymentId());
+        assertEquals("PENDING", second.status());
+        assertNotNull(second.pixCode());
+        assertEquals(1, jdbcTemplate.countPayments());
     }
 
-    private static final class StubJdbcTemplate extends JdbcTemplate {
-        private final boolean triggerFound;
-        private int queries;
-        private StubJdbcTemplate(boolean triggerFound) { this.triggerFound = triggerFound; }
-        @Override public <T> T queryForObject(String sql, Class<T> type) {
-            queries++;
-            if (sql.contains("pg_trigger") && type == Boolean.class) return type.cast(triggerFound);
-            throw new AssertionError("Unexpected database query: " + sql);
-        }
-        @Override public <T> T queryForObject(String sql, Class<T> type, Object... args) {
-            queries++;
-            if (sql.contains("pg_trigger") && type == Boolean.class) return type.cast(triggerFound);
-            throw new AssertionError("Unexpected database query: " + sql);
-        }
+    @Test
+    void deveProcessarPagamentoSimuladoAprovadoEAtualizarPedido() {
+        PaymentService.PaymentView checkout = service.checkout(
+                new PaymentService.CheckoutRequest(100L, "PIX"),
+                "auth_u1"
+        );
+
+        PaymentService.PaymentView processed = service.processSimulatedPayment(
+                checkout.paymentId(),
+                new PaymentService.ProcessPaymentRequest("PIX", null, null, null, 1, checkout.pixCode(), "APPROVED"),
+                "auth_u1"
+        );
+
+        assertEquals("APPROVED", processed.status());
+        assertEquals("Pago", processed.dbStatus());
+        assertEquals("Em andamento", processed.orderStatus());
+        assertEquals(new BigDecimal("150.00"), processed.amount());
     }
 
-    private static final class StubProvider implements PaymentProvider {
-        private boolean used;
-        @Override public String name() { return "test"; }
-        @Override public ProviderCheckout createCheckout(String ref, BigDecimal amount, PaymentMethod method) {
-            used = true;
-            return new ProviderCheckout("test", URI.create("http://localhost/checkout/test"), PaymentStatus.PENDING);
-        }
-        @Override public PaymentStatus getStatus(String id) { used = true; return PaymentStatus.PENDING; }
+    @Test
+    void deveProcessarPagamentoSimuladoRecusadoEPermitirNovaTentativa() {
+        PaymentService.PaymentView checkout = service.checkout(
+                new PaymentService.CheckoutRequest(100L, "Cartao"),
+                "auth_u1"
+        );
+
+        PaymentService.PaymentView declined = service.processSimulatedPayment(
+                checkout.paymentId(),
+                new PaymentService.ProcessPaymentRequest("Cartao", "CLIENTE RECUSADO", "0000", "ChArte Card", 1, null, null),
+                "auth_u1"
+        );
+
+        assertEquals("DECLINED", declined.status());
+        assertEquals("Cancelado", declined.dbStatus());
+        assertEquals("Pendente", declined.orderStatus());
+
+        PaymentService.PaymentView retryCheckout = service.checkout(
+                new PaymentService.CheckoutRequest(100L, "PIX"),
+                "auth_u1"
+        );
+        assertEquals("PENDING", retryCheckout.status());
+    }
+
+    @Test
+    void deveImpedirPagamentoDuplicadoDePedidoJaPago() {
+        PaymentService.PaymentView checkout = service.checkout(
+                new PaymentService.CheckoutRequest(100L, "PIX"),
+                "auth_u1"
+        );
+        service.processSimulatedPayment(
+                checkout.paymentId(),
+                new PaymentService.ProcessPaymentRequest("PIX", null, null, null, 1, checkout.pixCode(), "APPROVED"),
+                "auth_u1"
+        );
+
+        ResponseStatusException duplicateCheckout = assertThrows(
+                ResponseStatusException.class,
+                () -> service.checkout(new PaymentService.CheckoutRequest(100L, "PIX"), "auth_u1")
+        );
+        assertEquals(409, duplicateCheckout.getStatusCode().value());
+
+        ResponseStatusException duplicateProcess = assertThrows(
+                ResponseStatusException.class,
+                () -> service.processSimulatedPayment(
+                        checkout.paymentId(),
+                        new PaymentService.ProcessPaymentRequest("PIX", null, null, null, 1, null, "APPROVED"),
+                        "auth_u1"
+                )
+        );
+        assertEquals(409, duplicateProcess.getStatusCode().value());
+    }
+
+    @Test
+    void deveRetornar404AoTentarPagarPedidoInexistente() {
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> service.checkout(new PaymentService.CheckoutRequest(99999L, "PIX"), "auth_u1")
+        );
+        assertEquals(404, ex.getStatusCode().value());
+    }
+
+    @Test
+    void deveRetornar401QuandoUsuarioNaoAutenticado() {
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> service.checkout(new PaymentService.CheckoutRequest(100L, "PIX"), "")
+        );
+        assertEquals(401, ex.getStatusCode().value());
+    }
+
+    @Test
+    void deveBloquearManipulacaoDePagamentoPorOutroUsuario() {
+        PaymentService.PaymentView created = service.checkout(
+                new PaymentService.CheckoutRequest(100L, "PIX"),
+                "auth_u1"
+        );
+
+        ResponseStatusException viewByIntruder = assertThrows(
+                ResponseStatusException.class,
+                () -> service.findByPaymentId(created.paymentId(), "auth_u3")
+        );
+        assertEquals(403, viewByIntruder.getStatusCode().value());
+
+        ResponseStatusException processByIntruder = assertThrows(
+                ResponseStatusException.class,
+                () -> service.processSimulatedPayment(
+                        created.paymentId(),
+                        new PaymentService.ProcessPaymentRequest("PIX", null, null, null, 1, null, "APPROVED"),
+                        "auth_u3"
+                )
+        );
+        assertEquals(403, processByIntruder.getStatusCode().value());
+    }
+
+    @Test
+    void deveListarHistoricoDoClienteEVendasDoArtista() {
+        PaymentService.PaymentView created = service.checkout(
+                new PaymentService.CheckoutRequest(100L, "PIX"),
+                "auth_u1"
+        );
+        service.processSimulatedPayment(
+                created.paymentId(),
+                new PaymentService.ProcessPaymentRequest("PIX", null, null, null, 1, created.pixCode(), "APPROVED"),
+                "auth_u1"
+        );
+
+        List<PaymentService.PaymentView> customerHistory = service.listCustomerPayments("auth_u1");
+        assertEquals(1, customerHistory.size());
+        assertEquals("APPROVED", customerHistory.get(0).status());
+
+        List<PaymentService.PaymentView> artistSales = service.listArtistSales("auth_u2");
+        assertEquals(1, artistSales.size());
+        assertEquals("Cliente Um", artistSales.get(0).clientName());
+        assertTrue(artistSales.get(0).amount().compareTo(new BigDecimal("150.00")) == 0);
+    }
+
+    @Test
+    void deveBloquearSimulacaoComTokenInvalidoEPermitirComTokenValido() {
+        PaymentService.PaymentView created = service.checkout(
+                new PaymentService.CheckoutRequest(100L, "PIX"),
+                "auth_u1"
+        );
+
+        ResponseStatusException invalidTokenEx = assertThrows(
+                ResponseStatusException.class,
+                () -> service.simulate(created.paymentId(), "APPROVED", "token-errado", "auth_u1")
+        );
+        assertEquals(403, invalidTokenEx.getStatusCode().value());
+
+        PaymentService.PaymentView approved = service.simulate(created.paymentId(), "APPROVED", "segredo-dev", "auth_u1");
+        assertEquals("APPROVED", approved.status());
+        assertEquals("Pago", approved.dbStatus());
     }
 }

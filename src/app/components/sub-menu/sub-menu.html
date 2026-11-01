@@ -17,16 +17,21 @@
 
       <main>
         @if (auth.usuarioLogado$ | async) {
-          <button (click)="irParaMeuPerfil()">Meu Perfil</button>
+          <button type="button" (click)="irParaMeuPerfil()">Meu Perfil</button>
         } @else {
-          <button (click)="abrirLogin()">Logar</button>
-          <button (click)="modal.openModal('artistLogin')">Sou artista</button>
+          <button type="button" (click)="abrirLogin()">Logar</button>
+          <button type="button" (click)="modal.openModal('artistLogin')">Sou artista</button>
         }
-        <button (click)="irParaCarrinho()">Favoritos</button>
-        <button (click)="irParaChat()">Chat</button>
-        <button>ajuda</button>
+        <button type="button" (click)="irParaCarrinho('favoritos')">Favoritos</button>
+        <button type="button" (click)="irParaChat()">Chat</button>
+        <button type="button" (click)="alternarAjuda()">Ajuda</button>
+        @if (exibindoAjuda) {
+          <p style="font-size: 11px; color: #cbbdd2; padding: 6px 10px; margin: 0; line-height: 1.4;">
+            Dúvidas ou suporte acadêmico: <strong>suporte&#64;charte.art.br</strong>
+          </p>
+        }
         @if (auth.usuarioLogado$ | async) {
-          <button class="btn-logout" (click)="logout()">Logout</button>
+          <button type="button" class="btn-logout" (click)="logout()">Logout</button>
         }
       </main>
 

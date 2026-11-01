@@ -44,6 +44,11 @@ export const routes: Routes = [
     canActivate: [userLoginGuard],
   },
   {
+    path: 'checkout/:id',
+    component: OrderDetail,
+    canActivate: [userLoginGuard],
+  },
+  {
     path: 'cadastro',
     component: Cadastro,
   },

@@ -2,9 +2,8 @@ import { Component } from '@angular/core';
 import { ModalService } from '../../../services/modal.service';
 import { AsyncPipe } from '@angular/common';
 import { AuthService } from '../../../services/auth.service';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-user-login-modal',
@@ -14,9 +13,12 @@ import { RouterLink } from '@angular/router';
   styleUrl: './user-login-modal.css',
 })
 export class UserLoginModal {
+  email = '';
   nomeUsuario = '';
   senha = '';
   mostrarSenha = false;
+  mensagemErro = '';
+  carregando = false;
 
   constructor(
     public modal: ModalService,
@@ -25,13 +27,25 @@ export class UserLoginModal {
   ) {}
 
   async entrar(): Promise<void> {
-    const sucesso = await this.authService.login(this.nomeUsuario, this.senha, 'Comum');
+    if (this.carregando) return;
+    const identificador = this.nomeUsuario.trim() || this.email.trim();
+    if (!identificador || !this.senha) {
+      this.mensagemErro = 'Informe seu usuário (ou e-mail) e senha.';
+      return;
+    }
 
-    if (sucesso) {
-      this.modal.closeModal();
-      void this.router.navigate(['/']);
-    } else {
-      alert('Usuário ou senha incorretos para login de usuário comum');
+    this.carregando = true;
+    this.mensagemErro = '';
+    try {
+      const sucesso = await this.authService.login(identificador, this.senha, 'Comum');
+      if (sucesso) {
+        this.modal.closeModal();
+        void this.router.navigate(['/']);
+      } else {
+        this.mensagemErro = 'Usuário, e-mail ou senha incorretos.';
+      }
+    } finally {
+      this.carregando = false;
     }
   }
 
@@ -43,5 +57,4 @@ export class UserLoginModal {
     this.modal.closeModal();
     this.modal.openModal('artistLogin');
   }
-
 }

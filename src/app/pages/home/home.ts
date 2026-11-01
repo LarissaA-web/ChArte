@@ -30,13 +30,13 @@ export class Home {
   postSelecionado!: Post;
 
   constructor(
-  private pinService: PinService,
-  private cdr: ChangeDetectorRef
-) {
-  this.pinService.getArtes().subscribe(artes => {
-    this.artes = artes;
-    console.log('ARTES RECEBIDAS PELA HOME:', this.artes);
-    this.cdr.markForCheck();
-  });
-}
+    private pinService: PinService,
+    private cdr: ChangeDetectorRef
+  ) {
+    this.pinService.getArtes().subscribe(artes => {
+      this.artes = artes;
+      console.log('ARTES RECEBIDAS PELA HOME:', this.artes);
+      this.cdr.detectChanges();
+    });
+  }
 }

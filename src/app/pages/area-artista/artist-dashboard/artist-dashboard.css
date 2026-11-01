@@ -4,11 +4,12 @@
 .dashboard-heading h2 { margin: 0 0 5px; font-size: 23px; }
 .dashboard-heading p { margin: 0; color: rgba(255,255,255,.65); font-size: 15px; }
 .period-chip { flex: 0 0 auto; padding: 8px 13px; color: #d6b0fa; background: rgba(155,36,232,.13); border: 1px solid rgba(155,36,232,.27); border-radius: 20px; font-size: 13px; }
-.status-overview { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 15px; }
-.status-card { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 13px 14px; background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.09); border-radius: 12px; color: rgba(255,255,255,.75); font-size: 13px; }
+.status-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px; }
+.status-card { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 13px 14px; background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.09); border-radius: 12px; color: rgba(255,255,255,.75); font-size: 13px; font-family: inherit; text-align: left; cursor: pointer; transition: border-color .18s ease, background .18s ease, transform .18s ease; }
+.status-card:hover { border-color: rgba(214,176,250,.45); background: rgba(155,36,232,.14); transform: translateY(-1px); }
 .status-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; }
 .status-card strong { margin-left: auto; color: white; font-size: 18px; }
-.metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .metric-card, .chart-card { min-width: 0; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.09); border-radius: 15px; }
 .metric-card { display: grid; grid-template-columns: 32px 1fr; align-items: center; gap: 4px 10px; padding: 15px 17px; }
 .metric-icon { display: grid; width: 32px; height: 32px; grid-row: span 2; place-items: center; color: #d6b0fa; background: rgba(155,36,232,.16); border-radius: 9px; font-size: 16px; }

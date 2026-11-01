@@ -14,5 +14,12 @@ export class CommissionDetailModal {
   @Output() fechar = new EventEmitter<void>();
   @Output() iniciar = new EventEmitter<void>();
   @Output() enviar = new EventEmitter<void>();
-  get pagamentoPago(): boolean { return this.comissao.pagamentoStatus === 'pago'; }
+  get pagamentoPago(): boolean {
+    return (
+      this.comissao.pagamentoStatus === 'pago' ||
+      this.comissao.status === 'Em andamento' ||
+      this.comissao.status === 'Entregue' ||
+      this.comissao.status === 'Finalizada'
+    );
+  }
 }

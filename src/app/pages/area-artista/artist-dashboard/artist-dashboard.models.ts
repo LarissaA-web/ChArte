@@ -5,6 +5,7 @@ export interface DashboardMetricas {
   mes: number;
   ano: number;
   ganhos: number;
+  receitaTotal?: number;
   pendentes: number;
   andamento: number;
   finalizadas: number;
@@ -43,9 +44,23 @@ const STATUS_DASHBOARD: { status: StatusComissao; cor: string }[] = [
 ];
 
 const dataLocal = (data: Date): string => `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
-const dataComissao = (data: string): string => data.slice(0, 10);
-const chaveMes = (data: string): string => data.slice(0, 7);
+const dataComissao = (raw: string): string => {
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) return raw.trim();
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return dataLocal(parsed);
+  }
+  return raw.slice(0, 10);
+};
+const chaveMes = (raw: string): string => dataComissao(raw).slice(0, 7);
 const nomeMes = (data: Date): string => new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(data).replace('.', '');
+const valorComissao = (item: Comissao): number => Number(item.propostaValor ?? item.valor ?? 0);
+const comissaoGerouReceita = (item: Comissao): boolean =>
+  item.status === 'Finalizada' ||
+  item.status === 'Entregue' ||
+  item.status === 'Em andamento' ||
+  item.pagamentoStatus === 'pago';
 
 /** Pure projection from domain records to a backend-agnostic dashboard view model. */
 export function criarDadosDashboard(comissoes: Comissao[], agora = new Date()): DashboardData {
@@ -57,12 +72,21 @@ export function criarDadosDashboard(comissoes: Comissao[], agora = new Date()): 
   const inicioSemana = dataLocal(segunda);
   const fimSemanaDate = new Date(segunda);
   fimSemanaDate.setDate(fimSemanaDate.getDate() + 6);
+  const fimSemana = dataLocal(fimSemanaDate);
 
   const metricas: DashboardMetricas = {
-    semana: comissoes.filter((item) => dataComissao(item.criadaEm) >= inicioSemana && dataComissao(item.criadaEm) <= hoje).length,
-    mes: comissoes.filter((item) => chaveMes(item.criadaEm) === mesAtual && dataComissao(item.criadaEm) <= hoje).length,
-    ano: comissoes.filter((item) => item.criadaEm.startsWith(anoAtual) && dataComissao(item.criadaEm) <= hoje).length,
-    ganhos: comissoes.filter((item) => item.status === 'Finalizada' && chaveMes(item.concluidaEm || item.criadaEm) === mesAtual).reduce((total, item) => total + item.valor, 0),
+    semana: comissoes.filter((item) => {
+      const d = dataComissao(item.criadaEm);
+      return d >= inicioSemana && d <= fimSemana;
+    }).length,
+    mes: comissoes.filter((item) => chaveMes(item.criadaEm) === mesAtual).length,
+    ano: comissoes.filter((item) => dataComissao(item.criadaEm).startsWith(anoAtual)).length,
+    ganhos: comissoes
+      .filter((item) => comissaoGerouReceita(item) && chaveMes(item.concluidaEm || item.criadaEm) === mesAtual)
+      .reduce((total, item) => total + valorComissao(item), 0),
+    receitaTotal: comissoes
+      .filter((item) => comissaoGerouReceita(item))
+      .reduce((total, item) => total + valorComissao(item), 0),
     pendentes: comissoes.filter((item) => item.status === 'Pendente' || item.status === 'Solicitada' || item.status === 'Aguardando aprovação do cliente').length,
     andamento: comissoes.filter((item) => item.status === 'Em andamento' || item.status === 'Entregue').length,
     finalizadas: comissoes.filter((item) => item.status === 'Finalizada').length,
@@ -90,7 +114,9 @@ export function criarDadosDashboard(comissoes: Comissao[], agora = new Date()): 
 
   const ganhosPorMes = comissoesAno.map((mes) => ({
     ...mes,
-    valor: comissoes.filter((item) => item.status === 'Finalizada' && chaveMes(item.concluidaEm || item.criadaEm) === mes.periodo).reduce((total, item) => total + item.valor, 0),
+    valor: comissoes
+      .filter((item) => comissaoGerouReceita(item) && chaveMes(item.concluidaEm || item.criadaEm) === mes.periodo)
+      .reduce((total, item) => total + valorComissao(item), 0),
   }));
   const comissoesPorStatus = STATUS_DASHBOARD.map(({ status, cor }) => ({ status, cor, valor: comissoes.filter((item) => item.status === status).length }));
 

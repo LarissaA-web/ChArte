@@ -1,0 +1,157 @@
+.followers-stats {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 12px 0;
+  width: 100%;
+}
+
+.stat-pill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f4edf7;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.stat-pill:hover {
+  background: rgba(164, 71, 210, 0.16);
+  border-color: rgba(197, 141, 230, 0.4);
+}
+
+.stat-pill strong {
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.stat-pill span {
+  font-size: 11px;
+  color: #b7acc0;
+}
+
+.btn-follow {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(197, 141, 230, 0.45);
+  background: linear-gradient(135deg, #8e49c7, #68309c);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.18s ease, transform 0.18s ease;
+}
+
+.btn-follow:hover {
+  filter: brightness(1.08);
+}
+
+.btn-follow.following {
+  background: rgba(46, 107, 73, 0.35);
+  border-color: rgba(114, 210, 152, 0.55);
+  color: #c2f5d3;
+}
+
+.follow-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #ffb8bd;
+  text-align: center;
+}
+
+.followers-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(10, 7, 13, 0.76);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.followers-modal {
+  width: min(440px, 100%);
+  max-height: 75vh;
+  background: #211b25;
+  border: 1px solid #3f3346;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #f6effa;
+}
+
+.followers-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #352b3b;
+}
+
+.followers-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.followers-modal-header .close-btn {
+  background: transparent;
+  border: 0;
+  color: #cbbdd2;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.followers-modal-body {
+  padding: 14px 18px;
+  overflow-y: auto;
+  display: grid;
+  gap: 10px;
+}
+
+.follower-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #18141b;
+  border: 1px solid #302736;
+  text-decoration: none;
+  color: #f6effa;
+}
+
+.follower-row:hover {
+  border-color: #9b51c6;
+}
+
+.follower-row img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.follower-row strong {
+  display: block;
+  font-size: 14px;
+}
+
+.follower-row span {
+  display: block;
+  font-size: 12px;
+  color: #a99db2;
+}
+
+.followers-empty {
+  text-align: center;
+  color: #a99db2;
+  font-size: 13px;
+  padding: 24px 0;
+}
+

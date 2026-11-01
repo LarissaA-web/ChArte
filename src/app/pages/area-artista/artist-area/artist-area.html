@@ -19,33 +19,94 @@
     </header>
 
     @if (secaoAtual === 'dashboard') {
-      <app-artist-dashboard [totalObras]="artes.length" [avaliacao]="avaliacaoMedia" [dados]="dashboardData" />
+      <app-artist-dashboard [totalObras]="artes.length" [avaliacao]="avaliacaoMedia" [dados]="dashboardData" (selecionarStatus)="filtrarPeloDashboard($event)" />
       <section class="area-section activity-section"><header class="section-heading"><div><h2>Atividade recente</h2><p>Acompanhe as movimentações das suas comissões.</p></div></header>
         <div class="commission-list">
           @for (comissao of atividades; track comissao.id) {
-            <article class="commission-card"><img class="commission-avatar" [src]="comissao.cliente.foto" [alt]="comissao.cliente.nome" /><div class="commission-main"><h3>{{ comissao.titulo }}</h3><p>{{ comissao.cliente.nome }} · {{ comissao.criadaEm | date:'mediumDate' }}</p></div><span class="status-pill">{{ comissao.status }}</span></article>
-          } @empty { <p class="empty-state">Nenhuma atividade registrada nos dados de teste.</p> }
+            <article class="commission-card" style="cursor: pointer;" (click)="abrirComissaoDaAtividade(comissao)"><img class="commission-avatar" [src]="comissao.cliente.foto" [alt]="comissao.cliente.nome" /><div class="commission-main"><h3>{{ comissao.titulo }}</h3><p>{{ comissao.cliente.nome }} · {{ comissao.criadaEm | date:'mediumDate' }} · {{ (comissao.propostaValor ?? comissao.valor) | currency:'BRL' }}</p></div><span class="status-pill">{{ comissao.status }}</span></article>
+          } @empty { <p class="empty-state">Nenhuma comissão recebida até o momento.</p> }
         </div>
       </section>
     }
 
-    @if (secaoAtual === 'solicitacoes' || secaoAtual === 'comissoes' || secaoAtual === 'historico') {
+    @if (secaoAtual === 'comissoes' || secaoAtual === 'historico') {
       <section class="area-section">
-        <header class="section-heading"><div><h2>{{ secaoAtual === 'solicitacoes' ? 'Solicitações de comissão' : secaoAtual === 'historico' ? 'Histórico de comissões' : 'Minhas comissões' }}</h2><p>{{ secaoAtual === 'solicitacoes' ? 'Revise os pedidos recebidos.' : 'Acompanhe status, valores e prazos.' }}</p></div></header>
+        <header class="section-heading"><div><h2>{{ secaoAtual === 'historico' ? 'Histórico de comissões' : 'Minhas comissões' }}</h2><p>Acompanhe status, valores e prazos.</p></div></header>
         <div class="filter-row" aria-label="Filtrar comissões">@for (filtro of filtrosComissao; track filtro) { <button [class.active]="filtroComissao === filtro" (click)="filtroComissao = filtro">{{ filtro }}</button> }</div>
         <div class="commission-list">
           @for (comissao of comissoesVisiveis; track comissao.id) {
             <article class="commission-card commission-detail">
               <img class="commission-avatar" [src]="comissao.cliente.foto" [alt]="comissao.cliente.nome" />
-              <div class="commission-main"><h3>{{ comissao.titulo }}</h3><p>{{ comissao.cliente.nome }} · @{{ comissao.cliente.username }} · criada {{ comissao.criadaEm | date:'mediumDate' }}</p><p>{{ comissao.descricao }}</p><div class="references">@for (referencia of comissao.referencias; track referencia) { @if (referencia.startsWith('data:image') || referencia.startsWith('blob:')) { <a [href]="referencia" target="_blank" rel="noopener"><img class="reference-thumb" [src]="referencia" alt="Imagem de referência" /> Abrir imagem</a> } @else { <a [href]="referencia" target="_blank" rel="noopener">Abrir referência ↗</a> } }</div></div>
+              <div class="commission-main"><h3>{{ comissao.titulo }}</h3><p>{{ comissao.cliente.nome }} · @{{ comissao.cliente.username }} · criada {{ comissao.criadaEm | date:'mediumDate' }}</p><p>{{ comissao.descricao }}</p><div class="references">@for (referencia of comissao.referencias; track referencia) { @if (referencia.startsWith('data:image') || referencia.startsWith('blob:') || referencia.startsWith('http') || referencia.startsWith('/')) { <a [href]="referencia" target="_blank" rel="noopener"><img class="reference-thumb" [src]="referencia" alt="Imagem de referência" /> Abrir imagem</a> } @else { <a [href]="referencia" target="_blank" rel="noopener">Abrir referência ↗</a> } }</div></div>
               <div class="commission-meta"><strong>{{ (comissao.propostaValor ?? comissao.valor) | currency:'BRL' }}</strong><small>Prazo: {{ comissao.propostaPrazo || comissao.prazo }}</small>@if (secaoAtual === 'historico' && comissao.concluidaEm) { <small>Conclusão {{ comissao.concluidaEm | date:'mediumDate' }}</small> }<span class="status-pill">{{ comissao.status }}</span></div>
-              @if (secaoAtual === 'solicitacoes' && comissao.status === 'Solicitada') { <div class="commission-actions proposal-actions"><label>Valor proposto (R$)<input type="number" min="1" step="0.01" [ngModel]="valoresProposta[comissao.id] ?? comissao.propostaValor ?? comissao.valor" (ngModelChange)="valoresProposta[comissao.id] = $event" /></label><label>Prazo estimado<input type="text" maxlength="80" [ngModel]="prazosProposta[comissao.id] ?? comissao.propostaPrazo ?? comissao.prazo" (ngModelChange)="prazosProposta[comissao.id] = $event" /></label><button type="button" class="primary-action" (click)="aceitar(comissao)">Enviar proposta</button><button type="button" class="danger-action" (click)="recusar(comissao)">Recusar</button></div> }
+              @if (secaoAtual === 'comissoes' && comissao.status === 'Solicitada') { <div class="commission-actions proposal-actions"><label>Valor proposto (R$)<input type="number" min="1" step="0.01" [ngModel]="valoresProposta[comissao.id] ?? comissao.propostaValor ?? comissao.valor" (ngModelChange)="valoresProposta[comissao.id] = $event" /></label><label>Prazo estimado<input type="text" maxlength="80" [ngModel]="prazosProposta[comissao.id] ?? comissao.propostaPrazo ?? comissao.prazo" (ngModelChange)="prazosProposta[comissao.id] = $event" /></label><button type="button" class="primary-action" (click)="aceitar(comissao)">Enviar proposta</button><button type="button" class="danger-action" (click)="recusar(comissao)">Recusar</button></div> }
               @if (secaoAtual === 'comissoes' && comissao.status === 'Aguardando aprovação do cliente') { <span class="status-hint">Proposta enviada · aguardando resposta do cliente</span> }
-              @if (secaoAtual === 'comissoes' && (comissao.status === 'Pendente' || comissao.status === 'Em andamento')) { <button type="button" class="primary-action" (click)="abrirDetalhesComissao(comissao)">Ver comissão</button> }
-              @if (secaoAtual === 'comissoes' && comissao.status === 'Entregue') { <button type="button" class="primary-action" (click)="finalizar(comissao)">Marcar como finalizada</button> }
-              @if (comissao.arquivoEntrega) { <a class="delivery-link" [href]="comissao.arquivoEntrega" target="_blank" rel="noopener">Ver entrega</a> }
+              @if (secaoAtual === 'comissoes' && comissao.status === 'Pendente') {
+                <div class="offer-actions">
+                  <button type="button" class="secondary-action" (click)="abrirDetalhesComissao(comissao)">Ver detalhes</button>
+                  @if (comissao.pagamentoStatus === 'pago') {
+                    <button type="button" class="primary-action" (click)="abrirEntrega(comissao)">Enviar arte / comissão</button>
+                  } @else {
+                    <span class="status-hint">Aguardando pagamento do cliente</span>
+                  }
+                </div>
+              }
+              @if (secaoAtual === 'comissoes' && comissao.status === 'Em andamento') {
+                <div class="offer-actions">
+                  <button type="button" class="secondary-action" (click)="abrirDetalhesComissao(comissao)">Ver detalhes</button>
+                  <button type="button" class="primary-action" (click)="abrirEntrega(comissao)">Enviar arte / comissão</button>
+                </div>
+              }
+              @if (secaoAtual === 'comissoes' && comissao.status === 'Entregue') {
+                <div class="offer-actions">
+                  <span class="status-hint">Arte enviada · aguardando aprovação do cliente</span>
+                  <button type="button" class="secondary-action" (click)="abrirEntrega(comissao)">Reenviar arte</button>
+                </div>
+              }
+              @if (comissao.arquivoEntrega) { <a class="delivery-link" [href]="comissao.arquivoEntrega" target="_blank" rel="noopener">Ver arte entregue ↗</a> }
             </article>
-          } @empty { <div class="empty-state"><span>✦</span><h3>Nenhuma comissão nesta seção</h3><p>Os pedidos e atualizações de teste aparecerão aqui.</p></div> }
+          } @empty { <div class="empty-state"><span>✦</span><h3>Nenhuma comissão nesta seção</h3><p>Os pedidos e atualizações aparecerão aqui.</p></div> }
+        </div>
+      </section>
+    }
+
+    @if (secaoAtual === 'vendas') {
+      <section class="area-section">
+        <header class="section-heading">
+          <div>
+            <h2>Histórico de Vendas & Pagamentos Simulados</h2>
+            <p>Acompanhe as transações financeiras simuladas vinculadas aos seus pedidos e comissões.</p>
+          </div>
+          <div class="reviews-summary">
+            <strong>{{ receitaTotalAprovada | currency:'BRL' }}</strong>
+            <span>Receita aprovada ({{ vendasArtista.length }} transações)</span>
+          </div>
+        </header>
+        <div class="commission-list">
+          @for (venda of vendasArtista; track venda.paymentId) {
+            <article class="commission-card commission-detail">
+              <div class="commission-main">
+                <h3>{{ venda.orderTitle || 'Pedido #' + venda.orderId }}</h3>
+                <p>
+                  Transação: <strong>{{ venda.paymentId }}</strong> ·
+                  Cliente: <strong>{{ venda.clientName || 'Cliente ChArte' }}</strong> ·
+                  Modalidade: <strong>{{ venda.method }}</strong>
+                </p>
+                <p>{{ venda.simulationDetails || 'Operação registrada no simulador financeiro.' }}</p>
+              </div>
+              <div class="commission-meta">
+                <strong>{{ venda.amount | currency:'BRL' }}</strong>
+                <small>{{ venda.paymentDate | date:'dd/MM/yyyy' }}</small>
+                <span class="status-pill">{{ venda.status }}</span>
+              </div>
+            </article>
+          } @empty {
+            <div class="empty-state">
+              <span>💳</span>
+              <h3>Nenhuma venda registrada ainda</h3>
+              <p>Quando clientes realizarem pagamentos simulados nos seus pedidos, eles aparecerão aqui.</p>
+            </div>
+          }
         </div>
       </section>
     }
@@ -85,13 +146,11 @@
 
     @if (secaoAtual === 'portfolio') { <app-portfolio [artes]="artes" /> }
     @if (secaoAtual === 'artes') {
-      <section class="area-section"><header class="section-heading"><div><h2>Minhas Artes</h2><p>{{ artes.length }} obras no portfólio de teste.</p></div><button class="primary-action" type="button" (click)="selecionarSecao('adicionar')">Adicionar obra</button></header>
+      <section class="area-section"><header class="section-heading"><div><h2>Minhas Artes</h2><p>{{ artes.length }} obras no portfólio de teste.</p></div><button class="primary-action" type="button" (click)="abrirCriacaoArte()">Adicionar obra</button></header>
         @if (artes.length) { <div class="works-grid">@for (obra of artes; track obra.id) { <article class="work-card"><app-pin-card [post]="obra" (click)="abrirPin(obra)"></app-pin-card><div class="work-info"><div class="work-title-row"><h3>{{ obra.titulo }}</h3><span class="work-status">{{ statusDaObra(obra.preco) }}</span></div><p>{{ obra.categoria.nomeCategoria }} · {{ obra.preco ? (obra.preco | currency:'BRL') : 'Sem preço' }}</p><div class="work-actions"><button type="button" (click)="iniciarEdicaoArte(obra)">Editar</button><button type="button" class="text-action" (click)="excluirArte(obra)">Excluir</button></div></div></article> }</div> }
-        @else { <div class="empty-state"><span>🎨</span><h3>Seu portfólio está esperando por você</h3><p>Adicione uma obra para testar a experiência.</p><button class="primary-action" (click)="selecionarSecao('adicionar')">Adicionar arte</button></div> }
+        @else { <div class="empty-state"><span>🎨</span><h3>Seu portfólio está esperando por você</h3><p>Adicione uma obra para testar a experiência.</p><button class="primary-action" type="button" (click)="abrirCriacaoArte()">Adicionar arte</button></div> }
       </section>
     }
-
-    @if (secaoAtual === 'adicionar') { <section class="area-section"><header class="section-heading"><div><h2>Adicionar arte</h2><p>Use o formulário existente de publicação de obras.</p></div></header><div class="settings-card add-art-card"><span class="note-mark">✦</span><p>Imagem, categoria, estilo, descrição e preço serão registrados junto às suas artes de teste.</p><button class="primary-action" type="button" (click)="abrirCriacaoArte()">Criar nova arte</button></div></section> }
 
     @if (secaoAtual === 'avaliacoes') {
       <section class="area-section"><header class="section-heading"><div><h2>Avaliações</h2><p>Feedback de clientes nos dados de teste.</p></div></header><div class="reviews-summary"><strong>★ {{ avaliacaoMedia | number:'1.1-1' }}</strong><span>{{ avaliacoes.length }} avaliações</span></div><div class="review-list">@for (avaliacao of avaliacoes; track avaliacao.id) { <article class="review-card"><header class="review-person"><div><h3>{{ avaliacao.cliente }}</h3><span class="stars">{{ '★'.repeat(avaliacao.nota) }}{{ '☆'.repeat(5 - avaliacao.nota) }}</span></div><time>{{ avaliacao.data | date:'mediumDate' }}</time></header><p>{{ avaliacao.comentario }}</p></article> } @empty { <p class="empty-state">Ainda não há avaliações para este perfil de teste.</p> }</div></section>
@@ -128,7 +187,7 @@
 }
 </div>
 
-@if (entregaAtual) { <div class="dialog-backdrop" role="presentation"><section class="delivery-dialog" role="dialog" aria-modal="true" aria-labelledby="delivery-title"><button class="dialog-close" (click)="entregaAtual = null" aria-label="Fechar">×</button><h2 id="delivery-title">Enviar comissão</h2><p>Entrega para {{ entregaAtual.cliente.nome }} · {{ entregaAtual.titulo }}</p><label class="upload-box">{{ arquivoSelecionado ? 'Trocar imagem' : 'Selecionar imagem final (até 5 MB)' }}<input type="file" accept="image/*" (change)="selecionarArquivo($event)" /></label>@if (erroEntrega) { <p class="form-message">{{ erroEntrega }}</p> }@if (previewEntrega) { <img class="art-preview" [src]="previewEntrega" alt="Prévia da entrega" /> } @if (arquivoSelecionado) { <div class="file-row"><span>{{ arquivoSelecionado.name }}</span><button type="button" (click)="arquivoSelecionado = null; previewEntrega = ''">Remover</button></div> }<label>Observação<textarea [(ngModel)]="observacaoEntrega" rows="3"></textarea></label><button class="primary-action" [disabled]="!previewEntrega.startsWith('data:image')" (click)="enviarEntrega()">Registrar entrega</button></section></div> }
+@if (entregaAtual) { <div class="dialog-backdrop" role="presentation" (click)="entregaAtual = null"><section class="delivery-dialog" role="dialog" aria-modal="true" aria-labelledby="delivery-title" (click)="$event.stopPropagation()"><button class="dialog-close" type="button" (click)="entregaAtual = null" aria-label="Fechar">×</button><h2 id="delivery-title">Enviar arte e comissão</h2><p>Entrega para {{ entregaAtual.cliente.nome }} (@{{ entregaAtual.cliente.username }}) · {{ entregaAtual.titulo }}</p><label class="upload-box">{{ arquivoSelecionado || previewEntrega ? 'Trocar imagem da arte' : 'Selecionar imagem final da arte (até 5 MB)' }}<input type="file" accept="image/*" (change)="selecionarArquivo($event)" /></label>@if (erroEntrega) { <p class="form-message">{{ erroEntrega }}</p> }@if (previewEntrega) { <img class="art-preview" [src]="previewEntrega" alt="Prévia da entrega" /> } @if (arquivoSelecionado) { <div class="file-row"><span>{{ arquivoSelecionado.name }}</span><button type="button" (click)="arquivoSelecionado = null; previewEntrega = ''">Remover</button></div> }<label>Mensagem / Observação da entrega<textarea [(ngModel)]="observacaoEntrega" rows="3" placeholder="Adicione detalhes sobre a arte enviada para o cliente avaliar..."></textarea></label><button class="primary-action" type="button" [disabled]="!previewEntrega || enviandoEntrega" (click)="enviarEntrega()">{{ enviandoEntrega ? 'Enviando comissão...' : 'Enviar arte e comissão para o cliente' }}</button></section></div> }
 
 <app-pin-card-modal></app-pin-card-modal>
 

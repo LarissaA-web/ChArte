@@ -6,12 +6,18 @@
 
   <section class="status-overview" aria-label="Resumo de comissões por status">
     @for (status of statusResumo; track status.status) {
-      <article class="status-card"><span class="status-dot" [style.backgroundColor]="status.cor"></span><span>{{ status.status }}</span><strong>{{ status.valor }}</strong></article>
+      <button type="button" class="status-card" (click)="selecionarStatus.emit(status.status)" [title]="'Filtrar comissões por ' + status.status">
+        <span class="status-dot" [style.backgroundColor]="status.cor"></span>
+        <span>{{ status.status }}</span>
+        <strong>{{ status.valor }}</strong>
+      </button>
     }
   </section>
 
   <div class="metric-grid">
-    <article class="metric-card"><span class="metric-icon">R$</span><span class="metric-label">Ganhos deste mês</span><strong>{{ metricas.ganhos | currency:'BRL' }}</strong><small>comissões finalizadas</small></article>
+    <article class="metric-card"><span class="metric-icon">R$</span><span class="metric-label">Ganhos deste mês</span><strong>{{ metricas.ganhos | currency:'BRL' }}</strong><small>comissões pagas e concluídas no mês</small></article>
+    <article class="metric-card"><span class="metric-icon">∑</span><span class="metric-label">Receita acumulada</span><strong>{{ (metricas.receitaTotal ?? metricas.ganhos) | currency:'BRL' }}</strong><small>{{ metricas.finalizadas }} concluídas · {{ metricas.andamento }} em andamento/entrega</small></article>
+    <article class="metric-card"><span class="metric-icon">✦</span><span class="metric-label">Fluxo ativo</span><strong>{{ metricas.pendentes + metricas.andamento }}</strong><small>{{ metricas.pendentes }} aguardando · {{ metricas.andamento }} em produção/entrega</small></article>
     <article class="metric-card"><span class="metric-icon star-icon">★</span><span class="metric-label">Avaliação média</span><strong>{{ avaliacao | number:'1.1-1' }}</strong><small>{{ totalObras }} obras no portfólio</small></article>
   </div>
 

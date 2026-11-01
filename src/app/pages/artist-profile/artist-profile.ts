@@ -1,7 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Post } from '../../models/post';
 import { PinCardModal } from '../../components/pin-card-modal/pin-card-modal';
-import { PinCard } from '../../components/pin-card/pin-card';
 import { PinService } from '../../../services/pinService';
 import { SearchBar } from '../../components/search-bar/search-bar';
 import { Sidebar } from '../../components/profile/sidebar/sidebar';
@@ -29,7 +28,6 @@ import { EditProfileModal } from '../../components/profile/edit-profile-modal/ed
   standalone: true,
   imports: [
     SearchBar,
-    PinCard,
     PinCardModal,
     Sidebar,
     Banner,

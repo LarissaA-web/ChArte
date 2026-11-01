@@ -7,6 +7,7 @@ const CARRINHO_KEY = 'charte_carrinho';
 interface ItemCarrinho {
   id: number;
   addedAt: number;
+  post?: Post;
 }
 
 @Injectable({
@@ -14,7 +15,7 @@ interface ItemCarrinho {
 })
 export class CarrinhoService {
   private readonly itensSubject = new BehaviorSubject<ItemCarrinho[]>([]);
-  readonly itens$ = this.itensSubject.asObservable();
+  readonly itens$: Observable<ItemCarrinho[]> = this.itensSubject.asObservable();
 
   constructor() {
     this.carregarDoArmazenamento();
@@ -27,16 +28,19 @@ export class CarrinhoService {
       const parsed = JSON.parse(raw) as unknown;
       if (!Array.isArray(parsed)) return;
       const validos = parsed
-        .filter((item): item is ItemCarrinho =>
-          item != null &&
-          typeof item === 'object' &&
-          typeof (item as ItemCarrinho).id === 'number' &&
-          typeof (item as ItemCarrinho).addedAt === 'number',
+        .filter(
+          (item): item is ItemCarrinho =>
+            item != null &&
+            typeof item === 'object' &&
+            typeof (item as ItemCarrinho).id === 'number',
         )
-        .map((item) => ({ id: item.id, addedAt: item.addedAt }));
+        .map((item) => ({
+          id: item.id,
+          addedAt: typeof item.addedAt === 'number' ? item.addedAt : Date.now(),
+          post: item.post,
+        }));
       this.itensSubject.next(validos);
-    } catch (erro) {
-      console.error('Falha ao carregar carrinho do localStorage:', erro);
+    } catch {
       this.itensSubject.next([]);
     }
   }
@@ -44,18 +48,19 @@ export class CarrinhoService {
   private persistir(): void {
     try {
       localStorage.setItem(CARRINHO_KEY, JSON.stringify(this.itensSubject.value));
-    } catch (erro) {
-      console.error('Falha ao persistir carrinho no localStorage:', erro);
+    } catch {
+      // ignora erro de quota
     }
   }
 
-  adicionar(post: Post): void {
-    if (!post || typeof post.id !== 'number') return;
+  adicionar(post: Post): boolean {
+    if (!post || typeof post.id !== 'number') return false;
     const atual = this.itensSubject.value;
-    if (atual.some((item) => item.id === post.id)) return;
-    const novos = [...atual, { id: post.id, addedAt: Date.now() }];
+    if (atual.some((item) => item.id === post.id)) return false;
+    const novos = [...atual, { id: post.id, addedAt: Date.now(), post }];
     this.itensSubject.next(novos);
     this.persistir();
+    return true;
   }
 
   remover(postId: number): void {
@@ -67,15 +72,19 @@ export class CarrinhoService {
   }
 
   listar(): Post[] {
-    return this.itensSubject.value.map((item) => ({ id: item.id } as Post));
+    return this.itensSubject.value.map((item) => item.post ?? ({ id: item.id } as Post));
+  }
+
+  listarIds(): number[] {
+    return this.itensSubject.value.map((item) => item.id);
   }
 
   limpar(): void {
     this.itensSubject.next([]);
     try {
       localStorage.removeItem(CARRINHO_KEY);
-    } catch (erro) {
-      console.error('Falha ao limpar carrinho:', erro);
+    } catch {
+      // ignora erro
     }
   }
 

@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { ChangeDetectorRef, Component, Input, OnDestroy, OnInit } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { AuthService } from '../../../../services/auth.service';
 import { ArtistAreaService } from '../../../../services/artist-area.service';
@@ -7,6 +7,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Comissao, OpcaoComissao } from '../../../models/artist-area';
 import { ModalService } from '../../../../services/modal.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-comissoes',
@@ -15,7 +16,7 @@ import { ModalService } from '../../../../services/modal.service';
   templateUrl: './comissoes.html',
   styleUrl: './comissoes.css',
 })
-export class Comissoes {
+export class Comissoes implements OnInit, OnDestroy {
   @Input() perfil?: PerfilView;
   opcaoSelecionada: OpcaoComissao | null = null;
   titulo = '';
@@ -25,8 +26,27 @@ export class Comissoes {
   enviando = false;
   fotosReferencia: File[] = [];
   previewFotos: string[] = [];
+  private subscriptions = new Subscription();
 
-  constructor(private artistData: ArtistAreaService, private auth: AuthService, private router: Router, private modal: ModalService) {}
+  constructor(
+    private artistData: ArtistAreaService,
+    private auth: AuthService,
+    private router: Router,
+    private modal: ModalService,
+    private cdr: ChangeDetectorRef,
+  ) {}
+
+  ngOnInit(): void {
+    this.subscriptions.add(
+      this.artistData.catalogo$.subscribe(() => {
+        this.cdr.detectChanges();
+      }),
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
+  }
 
   get comissoesAbertas(): boolean {
     return this.perfil ? this.artistData.obterPrivacidade(this.perfil.nomeUsuario).aceitarComissoes : true;
@@ -50,6 +70,7 @@ export class Comissoes {
     this.fotosReferencia = [];
     this.previewFotos = [];
     this.erro = '';
+    this.cdr.detectChanges();
   }
 
   selecionarFotos(event: Event): void {
@@ -59,21 +80,24 @@ export class Comissoes {
     else this.erro = '';
     this.fotosReferencia = arquivos;
     this.previewFotos = arquivos.map((arquivo) => URL.createObjectURL(arquivo));
+    this.cdr.detectChanges();
   }
 
   async enviarSolicitacao(): Promise<void> {
     if (this.enviando) return;
     const usuario = this.auth.getUsuarioLogado();
     if (!this.opcaoSelecionada || !this.perfil) return;
-    if (!this.comissoesAbertas) { this.erro = 'A artista fechou as comissões. Seu pedido não foi enviado.'; return; }
+    if (!this.comissoesAbertas) { this.erro = 'A artista fechou as comissões. Seu pedido não foi enviado.'; this.cdr.detectChanges(); return; }
     if (!usuario) { this.modal.openModal('login'); return; }
-    if (!this.titulo.trim() || !this.descricao.trim()) { this.erro = 'Informe um título e descreva a arte desejada.'; return; }
+    if (!this.titulo.trim() || !this.descricao.trim()) { this.erro = 'Informe um título e descreva a arte desejada.'; this.cdr.detectChanges(); return; }
     const links = this.referencias.split('\n').map((item) => item.trim()).filter(Boolean);
     if (links.some((link) => { try { const url = new URL(link); return !['http:', 'https:'].includes(url.protocol); } catch { return true; } })) {
       this.erro = 'Use links completos iniciados por https:// ou http://.';
+      this.cdr.detectChanges();
       return;
     }
     this.enviando = true;
+    this.cdr.detectChanges();
     const fotos = await Promise.all(this.fotosReferencia.map((arquivo) => new Promise<string>((resolve) => {
       const reader = new FileReader();
       reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
@@ -91,10 +115,12 @@ export class Comissoes {
     const criada = await this.artistData.solicitarComissao(comissao);
     this.enviando = false;
     this.opcaoSelecionada = null;
+    this.cdr.detectChanges();
     if (criada) {
       void this.router.navigate(['/carrinho'], { queryParams: { aba: 'pedidos', pedido: criada.id } });
     } else {
       this.erro = 'Erro ao enviar solicitação. Tente novamente.';
+      this.cdr.detectChanges();
     }
   }
 }

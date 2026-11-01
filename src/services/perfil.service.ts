@@ -2,13 +2,13 @@ import { Injectable } from '@angular/core';
 import { Observable, from, of } from 'rxjs';
 import { PerfilView } from '../app/models/perfil';
 import { supabase } from '../app/core/supabase/supabase.client';
-import { map, catchError } from 'rxjs/operators';
+import { catchError } from 'rxjs/operators';
 
 @Injectable({ providedIn: 'root' })
 export class PerfilService {
 
   getPerfil(nomeUsuario: string): Observable<PerfilView | null> {
-    const nome = nomeUsuario.trim().toLowerCase();
+    const nome = nomeUsuario.trim().replace(/^@/, '').toLowerCase();
     return from(this.buscarPerfilNoBanco(nome)).pipe(
       catchError(() => of(null))
     );
@@ -29,13 +29,7 @@ export class PerfilService {
       .ilike('nome_usuario', nomeUsuario)
       .maybeSingle();
 
-    if (error) {
-      console.error('Erro ao buscar perfil do usuário:', error);
-      return null;
-    }
-
-    if (!usuario) {
-      console.warn('Usuário não encontrado:', nomeUsuario);
+    if (error || !usuario) {
       return null;
     }
 
@@ -49,30 +43,53 @@ export class PerfilService {
     } | null = null;
 
     if (ehArtista) {
-      const { data: artista, error: erroArtista } = await supabase
+      const { data: artista } = await supabase
         .from('artista')
         .select('id_artista, nome_artistico, data_inicio')
         .eq('id_usuario', usuario.id_usuario)
         .maybeSingle();
 
-      if (erroArtista) {
-        console.error('Erro ao buscar dados do artista:', erroArtista);
-      }
-
       artistaData = artista;
     }
 
-    const { data: redes, error: erroRedes } = await supabase
-      .from('redes_sociais')
-      .select('twitter, instagram, tiktok, youtube')
-      .eq('id_usuario', usuario.id_usuario)
-      .maybeSingle();
-
-    if (erroRedes) {
-      console.error('Erro ao buscar redes sociais:', erroRedes);
-    }
+    const [
+      { data: redes },
+      { count: seguidoresCount },
+      { count: seguindoCount },
+      { data: reviewsData },
+    ] = await Promise.all([
+      supabase
+        .from('redes_sociais')
+        .select('twitter, instagram, tiktok, youtube')
+        .eq('id_usuario', usuario.id_usuario)
+        .maybeSingle(),
+      supabase
+        .from('seguidores')
+        .select('id', { count: 'exact', head: true })
+        .eq('id_seguindo', usuario.id_usuario),
+      supabase
+        .from('seguidores')
+        .select('id', { count: 'exact', head: true })
+        .eq('id_seguidor', usuario.id_usuario),
+      artistaData?.id_artista
+        ? supabase
+            .from('review')
+            .select('nota')
+            .eq('id_artista', artistaData.id_artista)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
 
     const redesSociais = redes ?? {};
+    const totalReviews = Array.isArray(reviewsData) ? reviewsData.length : 0;
+    const avaliacaoMedia =
+      totalReviews > 0
+        ? Number(
+            (
+              reviewsData!.reduce((acc: number, r: any) => acc + Number(r.nota ?? 5), 0) /
+              totalReviews
+            ).toFixed(1),
+          )
+        : 0;
 
     return {
       idUsuario: String(usuario.id_usuario),
@@ -82,14 +99,15 @@ export class PerfilService {
       fotoPerfil: usuario.foto_perfil || '/gato.jpeg',
       banner: usuario.banner_perfil || '/nimona.jpeg',
       bio: usuario.bio || '',
-      tipoUsuario: ehArtista ? 'Artista' :
-        (String(usuario.tipo_usuario).toLowerCase() === 'cliente'
+      tipoUsuario: ehArtista
+        ? 'Artista'
+        : String(usuario.tipo_usuario).toLowerCase() === 'cliente'
           ? 'Comum'
-          : usuario.tipo_usuario),
-      seguidores: 0,
-      seguindo: 0,
-      avaliacaoMedia: 0,
-      totalReviews: 0,
+          : usuario.tipo_usuario,
+      seguidores: seguidoresCount ?? 0,
+      seguindo: seguindoCount ?? 0,
+      avaliacaoMedia,
+      totalReviews,
       idArtista: artistaData?.id_artista,
       redesSociais: redesSociais || {},
     };
@@ -103,12 +121,7 @@ export class PerfilService {
       await supabase.auth.getUser();
 
     const authUser = authData.user;
-
     if (erroAuth || !authUser) {
-      console.error(
-        'Não foi possível salvar o perfil: usuário não autenticado.',
-        erroAuth
-      );
       return false;
     }
 
@@ -119,19 +132,11 @@ export class PerfilService {
       .maybeSingle();
 
     if (erroUsuario || !usuario) {
-      console.error(
-        'Não foi possível localizar o perfil do usuário autenticado.',
-        erroUsuario
-      );
       return false;
     }
 
     const nomeAtual = nomeUsuario.trim().toLowerCase();
     if (usuario.nome_usuario?.trim().toLowerCase() !== nomeAtual) {
-      console.error(
-        'O perfil aberto não corresponde ao usuário autenticado.',
-        { perfilAberto: nomeAtual, perfilAutenticado: usuario.nome_usuario }
-      );
       return false;
     }
 
@@ -155,48 +160,41 @@ export class PerfilService {
         .select('id_usuario');
 
       if (error || !data || data.length === 0) {
-        console.error(
-          'Erro ao salvar os dados do usuário:',
-          error ?? 'Nenhuma linha foi atualizada; verifique a política RLS.'
-        );
         sucesso = false;
       }
     }
 
-    if (dadosAtualizados.nomeArtistico !== undefined) {
-      if (String(usuario.tipo_usuario).toLowerCase() !== 'artista') {
-        console.error('Não é possível salvar nome artístico para este tipo de usuário.');
-        sucesso = false;
-      } else {
-        const { data, error } = await supabase
-          .from('artista')
-          .update({ nome_artistico: dadosAtualizados.nomeArtistico })
-          .eq('id_usuario', usuario.id_usuario)
-          .select('id_artista');
+    const ehArtista =
+      String(usuario.tipo_usuario).toLowerCase() === 'artista';
 
-        if (error || !data || data.length === 0) {
-          console.error(
-            'Erro ao salvar o nome artístico:',
-            error ?? 'Nenhum artista foi atualizado; verifique a política RLS.'
-          );
-          sucesso = false;
-        }
+    if (ehArtista && dadosAtualizados.nomeArtistico !== undefined) {
+      const { data, error } = await supabase
+        .from('artista')
+        .update({ nome_artistico: dadosAtualizados.nomeArtistico })
+        .eq('id_usuario', usuario.id_usuario)
+        .select('id_artista');
+
+      if (error || !data || data.length === 0) {
+        sucesso = false;
       }
     }
 
-    if (dadosAtualizados.redesSociais !== undefined) {
+    if (dadosAtualizados.redesSociais) {
+      const redes = dadosAtualizados.redesSociais;
       const { error } = await supabase
         .from('redes_sociais')
-        .upsert({
-          id_usuario: usuario.id_usuario,
-          twitter: dadosAtualizados.redesSociais.twitter ?? null,
-          instagram: dadosAtualizados.redesSociais.instagram ?? null,
-          tiktok: dadosAtualizados.redesSociais.tiktok ?? null,
-          youtube: dadosAtualizados.redesSociais.youtube ?? null,
-        }, { onConflict: 'id_usuario' });
+        .upsert(
+          {
+            id_usuario: usuario.id_usuario,
+            twitter: redes.twitter ?? null,
+            instagram: redes.instagram ?? null,
+            tiktok: redes.tiktok ?? null,
+            youtube: redes.youtube ?? null,
+          },
+          { onConflict: 'id_usuario' }
+        );
 
       if (error) {
-        console.error('Erro ao salvar as redes sociais:', error);
         sucesso = false;
       }
     }
@@ -228,13 +226,10 @@ export class PerfilService {
     email: string;
     tipoUsuario: 'Comum' | 'Artista';
   }): Promise<PerfilView | null> {
-    // O trigger do banco já cria o perfil no cadastro
-    // Este método mantém compatibilidade mas retorna o perfil criado
     return this.buscarPerfilNoBanco(dados.nomeUsuario);
   }
 
   async removerPerfil(idUsuario: string): Promise<void> {
-    // Não remove do banco (exclusão real precisa de Edge Function)
-    // Apenas para compatibilidade
+    // Exclusão gerenciada pela conta autenticada
   }
 }

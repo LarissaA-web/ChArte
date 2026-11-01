@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, from, of } from 'rxjs';
+import { BehaviorSubject, Observable, combineLatest, from, of } from 'rxjs';
 import { Post } from '../app/models/post';
 import { supabase } from '../app/core/supabase/supabase.client';
 import { map, catchError } from 'rxjs/operators';
@@ -9,8 +9,18 @@ export class PinService {
 
   private artesCache: Post[] = [];
   private carregado = false;
+  private readonly termoPesquisaSubject = new BehaviorSubject<string>('');
+  readonly termoPesquisa$ = this.termoPesquisaSubject.asObservable();
 
-  getArtes(): Observable<Post[]> {
+  setTermoPesquisa(termo: string): void {
+    this.termoPesquisaSubject.next(termo ?? '');
+  }
+
+  getTermoPesquisa(): string {
+    return this.termoPesquisaSubject.value;
+  }
+
+  private obterTodasArtes(): Observable<Post[]> {
     if (this.carregado) {
       return of(this.artesCache);
     }
@@ -20,21 +30,46 @@ export class PinService {
     );
   }
 
+  getArtes(): Observable<Post[]> {
+    return combineLatest([this.obterTodasArtes(), this.termoPesquisa$]).pipe(
+      map(([artes, termo]) => this.filtrarPorTermo(artes, termo))
+    );
+  }
+
   buscarPorCategoria(categoria: string): Observable<Post[]> {
     const filtro = this.normalizar(categoria);
-    return this.getArtes().pipe(
+    return this.obterTodasArtes().pipe(
       map(artes => artes.filter(arte => this.normalizar(arte.categoria.nomeCategoria) === filtro))
     );
   }
 
   buscarPorEstilo(estilo: string): Observable<Post[]> {
     const filtro = this.normalizar(estilo);
-    return this.getArtes().pipe(
+    return this.obterTodasArtes().pipe(
       map(artes => artes.filter(arte =>
         this.normalizar(arte.estilo ?? '') === filtro ||
         (arte.tags ?? []).some(tag => this.normalizar(tag) === filtro)
       ))
     );
+  }
+
+  filtrarPorTermo(artes: Post[], termo: string): Post[] {
+    const busca = this.normalizar(termo ?? '');
+    if (!busca) {
+      return artes;
+    }
+    return artes.filter(arte => {
+      const campos = [
+        arte.titulo,
+        arte.descricao,
+        arte.estilo,
+        arte.categoria?.nomeCategoria,
+        arte.usuario?.nomeUsuario,
+        arte.usuario?.nomeArtistico,
+        ...(arte.tags ?? []),
+      ];
+      return campos.some(campo => this.normalizar(campo ?? '').includes(busca));
+    });
   }
 
   private normalizar(valor: string): string {
@@ -43,7 +78,7 @@ export class PinService {
 
   getArtesPorArtista(nomeUsuario: string): Observable<Post[]> {
     const nome = nomeUsuario.trim().toLowerCase();
-    return this.getArtes().pipe(
+    return this.obterTodasArtes().pipe(
       map(artes => artes.filter(arte =>
         arte.usuario.nomeUsuario?.toLowerCase() === nome
       ))

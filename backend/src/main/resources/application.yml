@@ -6,11 +6,6 @@ spring:
     name: charte-backend
   profiles:
     default: dev
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${SUPABASE_URL:https://djvktcghevdtpdqdtcmx.supabase.co}/auth/v1
   datasource:
     url: ${SUPABASE_JDBC_URL:jdbc:postgresql://127.0.0.1:5432/postgres}
     username: ${SUPABASE_DB_USER:}
@@ -20,22 +15,31 @@ spring:
       initialization-fail-timeout: -1
       connection-timeout: 5000
       maximum-pool-size: 5
+  sql:
+    init:
+      mode: ${SPRING_SQL_INIT_MODE:never}
 
 management:
+  health:
+    db:
+      enabled: false
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,info
   endpoint:
     health:
       show-details: never
 
 charte:
+  supabase:
+    url: ${SUPABASE_URL:https://djvktcghevdtpdqdtcmx.supabase.co}
+    anon-key: ${SUPABASE_ANON_KEY:sb_publishable_RTmhpqNrIjUGd4adjmF7EA_xY2o3M8C}
+  security:
+    jwt-secret: ${SUPABASE_JWT_SECRET:super-secret-jwt-token-with-at-least-32-characters-long}
   cors:
-    allowed-origin: ${CHARTE_CORS_ALLOWED_ORIGIN:http://localhost:4200}
+    allowed-origins: ${CHARTE_CORS_ALLOWED_ORIGINS:${CHARTE_CORS_ALLOWED_ORIGIN:http://localhost:4200}}
   payment:
-    provider: ${PAYMENT_PROVIDER:mock}
-    dev:
-      checkout-base-url: ${MOCK_CHECKOUT_BASE_URL:http://localhost:8080/}
-      simulation-token: ${MOCK_PAYMENT_SIMULATION_TOKEN:}
-      simulation-enabled: ${MOCK_PAYMENT_SIMULATION_ENABLED:false}
+    provider: ${CHARTE_PAYMENT_PROVIDER:${PAYMENT_PROVIDER:mock}}
+    mock-checkout-base-url: ${CHARTE_PAYMENT_MOCK_CHECKOUT_URL:${MOCK_CHECKOUT_BASE_URL:http://localhost:4200/pedido}}
+    dev-confirm-token: ${CHARTE_PAYMENT_DEV_CONFIRM_TOKEN:${MOCK_PAYMENT_SIMULATION_TOKEN:dev-confirm-token}}

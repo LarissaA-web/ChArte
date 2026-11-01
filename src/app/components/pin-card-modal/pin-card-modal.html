@@ -11,7 +11,7 @@
 
           <div class="tags-container">
             <div class="tags">
-              <span class="tag"> #{{ post.categoria?.nomeCategoria }} </span>
+              <span class="tag"> #{{ post.categoria.nomeCategoria }} </span>
             </div>
           </div>
         </div>
@@ -21,10 +21,10 @@
           <div class="artist-info">
             <div
               class="circle-sm"
-              [routerLink]="['/perfil', post?.usuario?.nomeUsuario || 'muzzle']"
+              [routerLink]="['/perfil', post.usuario.nomeUsuario || 'muzzle']"
               (click)="modal.closeModal()"
             >
-              <img [src]="post?.usuario?.fotoPerfil" />
+              <img [src]="post.usuario.fotoPerfil" [alt]="post.nomeArtistico" />
             </div>
 
             <div class="artist-name">
@@ -42,16 +42,40 @@
 
           <section class="modal-info-card" aria-label="Detalhes da obra">
             <h3>Detalhes da obra</h3>
-            <div class="modal-info-row"><span>Categoria</span><strong>{{ post.categoria?.nomeCategoria || 'Não informada' }}</strong></div>
+            <div class="modal-info-row"><span>Categoria</span><strong>{{ post.categoria.nomeCategoria || 'Não informada' }}</strong></div>
             @if (post.estilo) { <div class="modal-info-row"><span>Estilo</span><strong>{{ post.estilo }}</strong></div> }
             @if (post.tags?.length) { <div class="modal-info-row"><span>Tags</span><strong>{{ post.tags?.join(', ') }}</strong></div> }
           </section>
 
           <section class="modal-info-card artist-card" aria-label="Informações do artista">
-            <h3>Artista</h3>
-            <p>Conheça outras obras de {{ post.nomeArtistico }}.</p>
-            <a [routerLink]="['/perfil', post?.usuario?.nomeUsuario || 'muzzle']" (click)="modal.closeModal()">Ver perfil do artista <span aria-hidden="true">↗</span></a>
+            <div class="artist-card-header">
+              <div>
+                <h3>Artista · @{{ usernameArtista }}</h3>
+                <p>
+                  @if (resumoSeguidor) {
+                    <strong>{{ resumoSeguidor.followersCount }}</strong> seguidores ·
+                  }
+                  Conheça outras obras de {{ post.nomeArtistico }}.
+                </p>
+              </div>
+              @if (!ehProprioArtista && usernameArtista) {
+                <button
+                  type="button"
+                  class="btn-follow-artist"
+                  [class.following]="resumoSeguidor?.isFollowing"
+                  [disabled]="carregandoSeguir"
+                  (click)="alternarSeguirArtista()"
+                >
+                  {{ carregandoSeguir ? '...' : resumoSeguidor?.isFollowing ? 'Seguindo' : 'Seguir' }}
+                </button>
+              }
+            </div>
+            <a [routerLink]="['/perfil', post.usuario.nomeUsuario || 'muzzle']" (click)="modal.closeModal()">Ver perfil do artista <span aria-hidden="true">↗</span></a>
           </section>
+
+          @if (feedbackCompra) {
+            <p class="modal-purchase-feedback" [class.error]="erroCompra">{{ feedbackCompra }}</p>
+          }
         </div>
         <div class="bottom-actions">
           <button
@@ -75,7 +99,21 @@
                 <span class="price-label">Disponível para compra</span>
                 <span class="price">{{ post.preco | currency:'BRL' }}</span>
               </div>
-              <button class="btn-buy" type="button">Comprar</button>
+              <button
+                class="btn-cart-add"
+                type="button"
+                (click)="adicionarAoCarrinho()"
+              >
+                {{ jaNoCarrinho ? '✓ Ver no carrinho' : '+ Carrinho' }}
+              </button>
+              <button
+                class="btn-buy"
+                type="button"
+                [disabled]="comprando"
+                (click)="comprarAgora()"
+              >
+                {{ comprando ? 'Iniciando…' : 'Comprar' }}
+              </button>
             }
           </div>
         </div>

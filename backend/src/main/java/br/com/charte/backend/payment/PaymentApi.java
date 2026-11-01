@@ -1,48 +1,105 @@
 package br.com.charte.backend.payment;
 
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
+import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.context.annotation.Profile;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/payments")
-@Profile("dev & !prod")
 public class PaymentApi {
-    private final PaymentService service;
+    private final PaymentService paymentService;
 
-    public PaymentApi(PaymentService service) { this.service = service; }
+    public PaymentApi(PaymentService paymentService) {
+        this.paymentService = paymentService;
+    }
+
+    public record SimulateRequest(String status) {}
 
     @PostMapping("/checkout")
-    CheckoutResponse checkout(@Valid @RequestBody CheckoutRequest request, @AuthenticationPrincipal Jwt jwt) {
-        return service.checkout(request, jwt.getSubject());
+    public PaymentService.PaymentView checkout(
+            @RequestBody PaymentService.CheckoutRequest request,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return paymentService.checkout(request, jwt.getSubject());
+    }
+
+    @PostMapping("/{paymentId}/process")
+    public PaymentService.PaymentView processPayment(
+            @PathVariable String paymentId,
+            @RequestBody(required = false) PaymentService.ProcessPaymentRequest request,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return paymentService.processSimulatedPayment(paymentId, request, jwt.getSubject());
+    }
+
+    @PostMapping("/{paymentId}/cancel")
+    public PaymentService.PaymentView cancelPayment(
+            @PathVariable String paymentId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return paymentService.cancelPayment(paymentId, jwt.getSubject());
+    }
+
+    @PostMapping("/{paymentId}/refund")
+    public PaymentService.PaymentView refundPayment(
+            @PathVariable String paymentId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return paymentService.refundPayment(paymentId, jwt.getSubject());
     }
 
     @GetMapping("/{paymentId}")
-    StatusResponse status(@PathVariable String paymentId, @AuthenticationPrincipal Jwt jwt) {
-        return service.status(paymentId, jwt.getSubject());
+    public PaymentService.PaymentView getByPaymentId(
+            @PathVariable String paymentId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return paymentService.findByPaymentId(paymentId, jwt.getSubject());
+    }
+
+    @GetMapping("/orders/{orderId}/latest")
+    public PaymentService.PaymentView getLatestByOrderId(
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return paymentService.findLatestByOrderId(orderId, jwt.getSubject());
+    }
+
+    @GetMapping("/orders/{orderId}/history")
+    public List<PaymentService.PaymentView> listOrderPayments(
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return paymentService.listOrderPayments(orderId, jwt.getSubject());
+    }
+
+    @GetMapping("/history/customer")
+    public List<PaymentService.PaymentView> listCustomerPayments(
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return paymentService.listCustomerPayments(jwt.getSubject());
+    }
+
+    @GetMapping("/history/artist")
+    public List<PaymentService.PaymentView> listArtistSales(
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return paymentService.listArtistSales(jwt.getSubject());
     }
 
     @PostMapping("/dev/{paymentId}/status")
-    StatusResponse simulate(@PathVariable String paymentId, @Valid @RequestBody DevStatusRequest request,
-                            @RequestHeader(value = "X-Dev-Payment-Token", required = false) String token,
-                            @AuthenticationPrincipal Jwt jwt) {
-        return service.simulate(paymentId, request.status(), token, jwt.getSubject());
-    }
-
-    public record CheckoutRequest(@NotNull Long orderId, @NotNull PaymentMethod method) {}
-    public record CheckoutResponse(String paymentId, String checkoutUrl, String status) {}
-    public record StatusResponse(String paymentId, String status) {}
-    public record DevStatusRequest(@NotNull PaymentStatus status) {}
-}
-
-@RestController
-@Profile("dev & !prod")
-class MockCheckoutPage {
-    @GetMapping(value = "/checkout/{paymentId}", produces = "text/html;charset=UTF-8")
-    String checkoutPage() {
-        return "<!doctype html><html lang='pt-BR'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Checkout de teste</title><body style='font:16px system-ui;max-width:620px;margin:12vh auto;padding:24px;color:#211b25'><h1>Checkout de teste</h1><p>Este checkout é uma simulação de desenvolvimento. Nenhum gateway foi acionado e nenhum dinheiro foi recebido.</p><p>O status só pode ser alterado pelo mecanismo de desenvolvimento protegido no servidor.</p></body></html>";
+    public PaymentService.PaymentView simulate(
+            @PathVariable String paymentId,
+            @RequestBody SimulateRequest request,
+            @RequestHeader(name = "X-Confirm-Token", required = false) String token,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return paymentService.simulate(paymentId, request.status(), token, jwt.getSubject());
     }
 }

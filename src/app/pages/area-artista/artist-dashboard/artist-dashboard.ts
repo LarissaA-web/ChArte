@@ -1,6 +1,7 @@
-import { Component, Input } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DashboardChartPoint, DashboardData } from './artist-dashboard.models';
+import { StatusComissao } from '../../../models/artist-area';
 
 interface BarraGrafico extends DashboardChartPoint {
   x: number;
@@ -25,9 +26,10 @@ export class ArtistDashboard {
   @Input() totalObras = 0;
   @Input() avaliacao = 0;
   @Input() dados: DashboardData = {
-    metricas: { semana: 0, mes: 0, ano: 0, ganhos: 0, pendentes: 0, andamento: 0, finalizadas: 0 },
+    metricas: { semana: 0, mes: 0, ano: 0, ganhos: 0, receitaTotal: 0, pendentes: 0, andamento: 0, finalizadas: 0 },
     comissoesSemana: [], comissoesMes: [], comissoesAno: [], ganhosPorMes: [], comissoesPorStatus: [],
   };
+  @Output() selecionarStatus = new EventEmitter<StatusComissao>();
 
   readonly viewBoxLargura = 720;
   readonly linhaBase = 178;

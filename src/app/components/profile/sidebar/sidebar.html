@@ -1,50 +1,119 @@
 <!-- SIDEBAR -->
 <aside class="side-bar">
-  <div class="user-container">
-    <div class="nickName">{{ perfil?.nomeArtistico || perfil?.nome }}</div>
+  @if (perfil) {
+    <div class="user-container">
+      <div class="nickName">{{ perfil.nomeArtistico || perfil.nome }}</div>
+      <div class="user">@{{ perfil.nomeUsuario }}</div>
+    </div>
 
-    <div class="user">@{{ perfil?.nomeUsuario }}</div>
-  </div>
+    <!-- CONTADORES DE SEGUIDORES / SEGUINDO -->
+    <div class="followers-stats" aria-label="Seguidores e seguindo">
+      <button type="button" class="stat-pill" (click)="abrirModalSeguidores('seguidores')">
+        <strong>{{ totalSeguidores }}</strong>
+        <span>Seguidores</span>
+      </button>
+      <button type="button" class="stat-pill" (click)="abrirModalSeguidores('seguindo')">
+        <strong>{{ totalSeguindo }}</strong>
+        <span>Seguindo</span>
+      </button>
+    </div>
 
-  <div class="contact-container">
-    @if (isOwner && !editandoPerfil) {
-      <button class="btn btn-primary" (click)="abrirEditarPerfil()">Editar perfil</button>
-    } @else {
-      <button class="btn btn-primary">Formulário</button>
-      <button class="btn btn-sm" type="button" (click)="modal.openChat()">Chat</button>
+    <div class="contact-container">
+      @if (isOwner && !editandoPerfil) {
+        <button class="btn btn-primary" type="button" (click)="abrirEditarPerfil()">Editar perfil</button>
+      } @else if (!isOwner) {
+        <button
+          class="btn btn-follow"
+          [class.following]="estaSeguindo"
+          type="button"
+          [disabled]="carregandoSeguir"
+          (click)="alternarSeguir()"
+        >
+          {{ carregandoSeguir ? 'Atualizando...' : estaSeguindo ? '✓ Seguindo' : '+ Seguir' }}
+        </button>
+        <button class="btn btn-sm" type="button" (click)="abrirChatComArtista()">Chat</button>
+      }
+    </div>
+
+    @if (erroSeguir) {
+      <p class="follow-error">{{ erroSeguir }}</p>
     }
-  </div>
 
-  @if (exibirInformacoes) {
-    <div class="description-container">
-      <p>{{ perfil?.bio || 'Esse usuario gosta de ser misterioso.' }}</p>
-    </div>
-  }
+    @if (exibirInformacoes) {
+      <div class="description-container">
+        <p>{{ perfil.bio || 'Esse usuário gosta de ser misterioso.' }}</p>
+      </div>
+    }
 
-  @if (exibirRedesSociais) {
-    <div class="social-container">
-      <ul>
-        @if (perfil?.redesSociais?.twitter) {
-          <li>
-            <a href="">{{ perfil?.redesSociais?.twitter }} (X)</a>
-          </li>
-        }
-        @if (perfil?.redesSociais?.instagram) {
-          <li>
-            <a href="">{{ perfil?.redesSociais?.instagram }} (Insta)</a>
-          </li>
-        }
-        @if (perfil?.redesSociais?.tiktok) {
-          <li>
-            <a href="">{{ perfil?.redesSociais?.tiktok }} (TikTok)</a>
-          </li>
-        }
-        @if (perfil?.redesSociais?.youtube) {
-          <li>
-            <a href="">{{ perfil?.redesSociais?.youtube }} (YouTube)</a>
-          </li>
-        }
-      </ul>
-    </div>
+    @if (exibirRedesSociais && perfil.redesSociais) {
+      <div class="social-container">
+        <ul>
+          @if (perfil.redesSociais.twitter) {
+            <li>
+              <a [href]="formatarUrlSocial('twitter', perfil.redesSociais.twitter)" target="_blank" rel="noopener noreferrer">
+                {{ perfil.redesSociais.twitter }} (X)
+              </a>
+            </li>
+          }
+          @if (perfil.redesSociais.instagram) {
+            <li>
+              <a [href]="formatarUrlSocial('instagram', perfil.redesSociais.instagram)" target="_blank" rel="noopener noreferrer">
+                {{ perfil.redesSociais.instagram }} (Insta)
+              </a>
+            </li>
+          }
+          @if (perfil.redesSociais.tiktok) {
+            <li>
+              <a [href]="formatarUrlSocial('tiktok', perfil.redesSociais.tiktok)" target="_blank" rel="noopener noreferrer">
+                {{ perfil.redesSociais.tiktok }} (TikTok)
+              </a>
+            </li>
+          }
+          @if (perfil.redesSociais.youtube) {
+            <li>
+              <a [href]="formatarUrlSocial('youtube', perfil.redesSociais.youtube)" target="_blank" rel="noopener noreferrer">
+                {{ perfil.redesSociais.youtube }} (YouTube)
+              </a>
+            </li>
+          }
+        </ul>
+      </div>
+    }
   }
 </aside>
+
+<!-- MODAL DE SEGUIDORES / SEGUINDO -->
+@if (modalListaTipo) {
+  <div class="followers-modal-backdrop" (click)="fecharModalSeguidores()">
+    <section class="followers-modal" (click)="$event.stopPropagation()">
+      <header class="followers-modal-header">
+        <h3>{{ modalListaTipo === 'seguidores' ? 'Seguidores' : 'Seguindo' }} de @{{ perfil.nomeUsuario }}</h3>
+        <button type="button" class="close-btn" (click)="fecharModalSeguidores()">×</button>
+      </header>
+
+      <div class="followers-modal-body">
+        @if (carregandoLista) {
+          <p class="followers-empty">Carregando perfis...</p>
+        } @else {
+          @for (item of listaPerfis; track item.userId) {
+            <a
+              class="follower-row"
+              [routerLink]="['/perfil', item.username]"
+              (click)="fecharModalSeguidores()"
+            >
+              <img [src]="item.avatarUrl || '/gato.jpeg'" [alt]="item.fullName" />
+              <div>
+                <strong>{{ item.fullName }}</strong>
+                <span>@{{ item.username }} {{ item.isArtist ? '· Artista' : '' }}</span>
+              </div>
+            </a>
+          } @empty {
+            <p class="followers-empty">
+              {{ modalListaTipo === 'seguidores' ? 'Nenhum seguidor registrado ainda.' : 'Ainda não segue outros perfis.' }}
+            </p>
+          }
+        }
+      </div>
+    </section>
+  </div>
+}

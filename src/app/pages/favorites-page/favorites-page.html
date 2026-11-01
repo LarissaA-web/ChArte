@@ -4,15 +4,31 @@
 <app-pin-card-modal></app-pin-card-modal>
 
 <main class="orders-page">
-  <header class="orders-heading"></header>
-  <nav class="orders-tabs" aria-label="Favoritos e pedidos">
+  <header class="orders-heading">
+    <span>CENTRAL DO CLIENTE</span>
+    <h1>Minha Galeria & Contratações</h1>
+    <p>Gerencie seus favoritos, carrinho de compras, pedidos, pagamentos simulados e artistas seguidos.</p>
+  </header>
+
+  <nav class="orders-tabs" aria-label="Abas da central do cliente">
     <button type="button" [class.active]="aba === 'favoritos'" (click)="selecionarAba('favoritos')">
       Favoritos <span>{{ (artesFavoritas$ | async)?.length ?? 0 }}</span>
+    </button>
+    <button type="button" [class.active]="aba === 'carrinho'" (click)="selecionarAba('carrinho')">
+      Carrinho <span>{{ itensCarrinho.length }}</span>
     </button>
     <button type="button" [class.active]="aba === 'pedidos'" (click)="selecionarAba('pedidos')">
       Pedidos <span>{{ pedidos.length }}</span>
     </button>
+    <button type="button" [class.active]="aba === 'pagamentos'" (click)="selecionarAba('pagamentos')">
+      Pagamentos <span>{{ historicoPagamentos.length }}</span>
+    </button>
+    <button type="button" [class.active]="aba === 'seguindo'" (click)="selecionarAba('seguindo')">
+      Artistas Seguidos <span>{{ artistasSeguidos.length }}</span>
+    </button>
   </nav>
+
+  <!-- ABA 1: FAVORITOS -->
   @if (aba === 'favoritos') {
     <section class="pin_container favorites-grid">
       @for (arte of artesFavoritas$ | async; track arte.id) {
@@ -26,7 +42,65 @@
         </div>
       }
     </section>
-  } @else {
+  }
+
+  <!-- ABA 2: CARRINHO DE COMPRAS -->
+  @if (aba === 'carrinho') {
+    <section class="orders-list">
+      @if (erroCarrinho) {
+        <p class="cart-error-banner">{{ erroCarrinho }}</p>
+      }
+
+      @if (itensCarrinho.length > 0) {
+        <div class="cart-summary-bar">
+          <div>
+            <strong>{{ itensCarrinho.length }} {{ itensCarrinho.length === 1 ? 'obra selecionada' : 'obras selecionadas' }}</strong>
+            <span>Total estimado: {{ totalCarrinho | currency:'BRL' }}</span>
+          </div>
+        </div>
+      }
+
+      @for (item of itensCarrinho; track item.id) {
+        <article class="order-card cart-item-card">
+          <img class="cart-thumb" [src]="item.portfolio" [alt]="item.titulo" />
+          <div class="order-main">
+            <span class="order-overline">{{ item.categoria.nomeCategoria || 'Obra Digital' }}</span>
+            <h2>{{ item.titulo }}</h2>
+            <p>
+              Artista <strong>@{{ item.usuario.nomeUsuario || item.nomeArtistico }}</strong> ·
+              {{ item.descricao || 'Aquisição de arte digital' }}
+            </p>
+          </div>
+          <div class="cart-actions">
+            <strong class="cart-price">{{ item.preco | currency:'BRL' }}</strong>
+            <div class="cart-btn-group">
+              <button
+                type="button"
+                class="btn-checkout-now"
+                [disabled]="processandoCompraId === item.id"
+                (click)="finalizarCompraItem(item)"
+              >
+                {{ processandoCompraId === item.id ? 'Gerando pedido…' : 'Ir para Pagamento' }}
+              </button>
+              <button type="button" class="btn-remove-cart" (click)="removerDoCarrinho(item.id)">
+                Remover
+              </button>
+            </div>
+          </div>
+        </article>
+      } @empty {
+        <div class="orders-empty">
+          <div class="empty-icon">🛒</div>
+          <h2>Seu carrinho está vazio</h2>
+          <p>Adicione obras disponíveis para compra ou solicite uma comissão personalizada diretamente no perfil de um artista.</p>
+          <a routerLink="/">Explorar obras</a>
+        </div>
+      }
+    </section>
+  }
+
+  <!-- ABA 3: PEDIDOS -->
+  @if (aba === 'pedidos') {
     <section class="orders-list">
       @if (!username) {
         <div class="orders-empty">
@@ -60,8 +134,92 @@
           <div class="orders-empty">
             <div class="empty-icon">✦</div>
             <h2>Nenhum pedido por aqui</h2>
-            <p>Quando você solicitar um orçamento, ele aparecerá nesta lista.</p>
+            <p>Quando você solicitar um orçamento ou comprar uma arte, ela aparecerá nesta lista.</p>
             <a routerLink="/">Encontrar um artista</a>
+          </div>
+        }
+      }
+    </section>
+  }
+
+  <!-- ABA 4: HISTÓRICO DE PAGAMENTOS SIMULADOS -->
+  @if (aba === 'pagamentos') {
+    <section class="orders-list">
+      <div class="filter-pills">
+        <button type="button" [class.active]="filtroStatusPagamento === 'TODOS'" (click)="filtroStatusPagamento = 'TODOS'">Todos</button>
+        <button type="button" [class.active]="filtroStatusPagamento === 'APPROVED'" (click)="filtroStatusPagamento = 'APPROVED'">Aprovados</button>
+        <button type="button" [class.active]="filtroStatusPagamento === 'PENDING'" (click)="filtroStatusPagamento = 'PENDING'">Pendentes</button>
+        <button type="button" [class.active]="filtroStatusPagamento === 'DECLINED'" (click)="filtroStatusPagamento = 'DECLINED'">Recusados / Cancelados</button>
+        <button type="button" [class.active]="filtroStatusPagamento === 'REFUNDED'" (click)="filtroStatusPagamento = 'REFUNDED'">Reembolsados</button>
+      </div>
+
+      @if (carregandoPagamentos) {
+        <div class="orders-empty">
+          <p>Carregando histórico de transações simuladas...</p>
+        </div>
+      } @else {
+        @for (tx of pagamentosFiltrados; track tx.paymentId) {
+          <a class="order-card tx-history-card" [routerLink]="['/pedido', tx.orderId]">
+            <div class="order-art">💳</div>
+            <div class="order-main">
+              <span class="order-overline">
+                TRANSAÇÃO {{ tx.paymentId }} · PEDIDO #{{ tx.orderId }} · {{ tx.paymentDate | date:'dd/MM/yyyy' }}
+              </span>
+              <h2>{{ tx.orderTitle || 'Pedido #' + tx.orderId }}</h2>
+              <p>
+                Modalidade: <strong>{{ tx.method }}</strong>
+                @if (tx.artistName) { · Artista: <strong>{{ tx.artistName }}</strong> }
+                · {{ tx.simulationDetails }}
+              </p>
+            </div>
+            <div class="order-info">
+              <strong>{{ tx.amount | currency:'BRL' }}</strong>
+              <span class="order-status" [attr.data-tx-status]="tx.status">
+                {{ traduzirStatusGateway(tx.status) }}
+              </span>
+            </div>
+            <span class="order-arrow">›</span>
+          </a>
+        } @empty {
+          <div class="orders-empty">
+            <div class="empty-icon">💳</div>
+            <h2>Nenhuma transação encontrada</h2>
+            <p>Suas tentativas e confirmações de pagamento simulado aparecerão aqui.</p>
+          </div>
+        }
+      }
+    </section>
+  }
+
+  <!-- ABA 5: ARTISTAS SEGUIDOS -->
+  @if (aba === 'seguindo') {
+    <section class="orders-list">
+      @if (carregandoSeguindo) {
+        <div class="orders-empty">
+          <p>Carregando artistas seguidos...</p>
+        </div>
+      } @else {
+        @for (artista of artistasSeguidos; track artista.userId) {
+          <article class="order-card followed-artist-card">
+            <img class="cart-thumb avatar-round" [src]="artista.avatarUrl || '/gato.jpeg'" [alt]="artista.fullName" />
+            <div class="order-main">
+              <span class="order-overline">{{ artista.isArtist ? 'ARTISTA' : 'USUÁRIO' }}</span>
+              <h2>{{ artista.fullName }}</h2>
+              <p><strong>@{{ artista.username }}</strong> · {{ artista.bio || 'Sem biografia informada.' }}</p>
+            </div>
+            <div class="cart-btn-group">
+              <a class="btn-checkout-now" [routerLink]="['/perfil', artista.username]">Ver Perfil</a>
+              <button type="button" class="btn-remove-cart" (click)="deixarDeSeguir(artista.username)">
+                Deixar de seguir
+              </button>
+            </div>
+          </article>
+        } @empty {
+          <div class="orders-empty">
+            <div class="empty-icon">✦</div>
+            <h2>Você ainda não segue nenhum artista</h2>
+            <p>Visite o perfil dos seus artistas favoritos e clique em “Seguir” para acompanhá-los por aqui.</p>
+            <a routerLink="/">Descobrir artistas</a>
           </div>
         }
       }

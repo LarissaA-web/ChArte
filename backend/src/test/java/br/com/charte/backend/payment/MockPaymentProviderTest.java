@@ -1,40 +1,64 @@
 package br.com.charte.backend.payment;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
-import java.net.URI;
-
 import org.junit.jupiter.api.Test;
 
 class MockPaymentProviderTest {
-    private final MockPaymentProvider provider = new MockPaymentProvider(URI.create("http://localhost:8080/"));
 
     @Test
-    void createsPendingCheckoutWithMockUrlAndNoRealCharge() {
-        ProviderCheckout checkout = provider.createCheckout("payment-123", new BigDecimal("50.00"), PaymentMethod.PIX);
+    void deveCriarCheckoutPendenteComDadosEsperadosECodigoPixSimulado() {
+        MockPaymentProvider provider = new MockPaymentProvider("http://localhost:4200/checkout");
 
-        assertThat(checkout.providerPaymentId()).startsWith("mock_");
-        assertThat(checkout.checkoutUrl().toString()).startsWith("http://localhost:8080/checkout/mock_");
-        assertThat(checkout.status()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(provider.getStatus(checkout.providerPaymentId())).isEqualTo(PaymentStatus.PENDING);
+        PaymentProvider.CheckoutResult result = provider.createCheckout(
+                10L,
+                new BigDecimal("199.90"),
+                PaymentMethod.PIX
+        );
+
+        assertTrue(result.paymentId().startsWith("pay_"));
+        assertEquals(PaymentStatus.PENDING, result.status());
+        assertNotNull(result.pixCode());
+        assertTrue(result.pixCode().contains("CHARTE-SIM-10-"));
+        assertTrue(result.checkoutUrl().contains("paymentId=" + result.paymentId()));
+        assertTrue(result.checkoutUrl().contains("orderId=10"));
+        assertTrue(result.checkoutUrl().contains("method=PIX"));
     }
 
     @Test
-    void rejectsInvalidAmount() {
-        assertThatThrownBy(() -> provider.createCheckout("payment-123", BigDecimal.ZERO, PaymentMethod.CARD))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
+    void deveSimularPagamentoAprovadoERecusadoNoBackend() {
+        MockPaymentProvider provider = new MockPaymentProvider("http://localhost:4200/checkout");
+        PaymentProvider.CheckoutResult created = provider.createCheckout(15L, new BigDecimal("85.00"), PaymentMethod.CARTAO);
 
-    @Test
-    void developmentStatusChangeIsScopedToKnownMockPayment() {
-        ProviderCheckout checkout = provider.createCheckout("payment-123", BigDecimal.TEN, PaymentMethod.TRANSFER);
+        PaymentProvider.SimulationResult approved = provider.evaluateSimulation(
+                created.paymentId(),
+                new PaymentProvider.SimulatedPaymentInput(
+                        PaymentMethod.CARTAO,
+                        "MARIA SILVA",
+                        "4242",
+                        "ChArte Card",
+                        2,
+                        null,
+                        "APPROVED"
+                )
+        );
+        assertEquals(PaymentStatus.APPROVED, approved.status());
 
-        provider.setDevelopmentStatus(checkout.providerPaymentId(), PaymentStatus.FAILED);
-
-        assertThat(provider.getStatus(checkout.providerPaymentId())).isEqualTo(PaymentStatus.FAILED);
-        assertThatThrownBy(() -> provider.setDevelopmentStatus("unknown", PaymentStatus.PAID))
-                .isInstanceOf(IllegalArgumentException.class);
+        PaymentProvider.SimulationResult declinedByCard = provider.evaluateSimulation(
+                created.paymentId(),
+                new PaymentProvider.SimulatedPaymentInput(
+                        PaymentMethod.CARTAO,
+                        "JOAO TESTE",
+                        "0000",
+                        "ChArte Card",
+                        1,
+                        null,
+                        null
+                )
+        );
+        assertEquals(PaymentStatus.DECLINED, declinedByCard.status());
     }
 }

@@ -54,7 +54,14 @@
     @if (showSearchCard) {
       <div class="searchCard">
         <span>
-          <input class="input searchbar" type="search" placeholder="Pesquise" />
+          <input
+            class="input searchbar"
+            type="search"
+            placeholder="Pesquise"
+            [value]="termoPesquisa"
+            (input)="aoPesquisar($event)"
+            (search)="aoPesquisar($event)"
+          />
         </span>
       </div>
     }

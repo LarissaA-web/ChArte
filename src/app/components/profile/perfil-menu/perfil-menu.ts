@@ -31,3 +31,5 @@ export class PerfilMenuComponent {
     this.abaSelecionada.emit(aba);
   }
 }
+
+export { PerfilMenuComponent as PerfilMenu };
