@@ -1,4 +1,9 @@
-import { Comissao, StatusComissao } from '../../../models/artist-area';
+import {
+  Comissao,
+  StatusComissao,
+  calcularRepasseComissao,
+  pagamentoLiberadoParaArtista,
+} from '../../../models/artist-area';
 
 export interface DashboardMetricas {
   semana: number;
@@ -55,12 +60,10 @@ const dataComissao = (raw: string): string => {
 };
 const chaveMes = (raw: string): string => dataComissao(raw).slice(0, 7);
 const nomeMes = (data: Date): string => new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(data).replace('.', '');
-const valorComissao = (item: Comissao): number => Number(item.propostaValor ?? item.valor ?? 0);
+const valorComissao = (item: Comissao): number =>
+  calcularRepasseComissao(item).valorLiquido;
 const comissaoGerouReceita = (item: Comissao): boolean =>
-  item.status === 'Finalizada' ||
-  item.status === 'Entregue' ||
-  item.status === 'Em andamento' ||
-  item.pagamentoStatus === 'pago';
+  pagamentoLiberadoParaArtista(item);
 
 /** Pure projection from domain records to a backend-agnostic dashboard view model. */
 export function criarDadosDashboard(comissoes: Comissao[], agora = new Date()): DashboardData {

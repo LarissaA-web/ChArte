@@ -35,17 +35,29 @@
         <div class="filter-row" aria-label="Filtrar comissões">@for (filtro of filtrosComissao; track filtro) { <button [class.active]="filtroComissao === filtro" (click)="filtroComissao = filtro">{{ filtro }}</button> }</div>
         <div class="commission-list">
           @for (comissao of comissoesVisiveis; track comissao.id) {
+            @let repasse = repasseDaComissao(comissao);
             <article class="commission-card commission-detail">
               <img class="commission-avatar" [src]="comissao.cliente.foto" [alt]="comissao.cliente.nome" />
               <div class="commission-main"><h3>{{ comissao.titulo }}</h3><p>{{ comissao.cliente.nome }} · @{{ comissao.cliente.username }} · criada {{ comissao.criadaEm | date:'mediumDate' }}</p><p>{{ comissao.descricao }}</p><div class="references">@for (referencia of comissao.referencias; track referencia) { @if (referencia.startsWith('data:image') || referencia.startsWith('blob:') || referencia.startsWith('http') || referencia.startsWith('/')) { <a [href]="referencia" target="_blank" rel="noopener"><img class="reference-thumb" [src]="referencia" alt="Imagem de referência" /> Abrir imagem</a> } @else { <a [href]="referencia" target="_blank" rel="noopener">Abrir referência ↗</a> } }</div></div>
-              <div class="commission-meta"><strong>{{ (comissao.propostaValor ?? comissao.valor) | currency:'BRL' }}</strong><small>Prazo: {{ comissao.propostaPrazo || comissao.prazo }}</small>@if (secaoAtual === 'historico' && comissao.concluidaEm) { <small>Conclusão {{ comissao.concluidaEm | date:'mediumDate' }}</small> }<span class="status-pill">{{ comissao.status }}</span></div>
+              <div class="commission-meta">
+                <strong>{{ repasse.valorLiquido | currency:'BRL' }} <small style="font-weight: 500; opacity: 0.78;">líquido</small></strong>
+                <small>Total cliente: {{ repasse.valorBruto | currency:'BRL' }} · {{ repasse.recusadaPeloCliente ? 'Recusada pelo cliente (50%)' : repasse.temTaxa ? 'Taxa 8% (-' + (repasse.valorTaxa | currency:'BRL') + ')' : 'Isento de taxa (≤ R$ 30)' }}</small>
+                <small>Prazo: {{ comissao.propostaPrazo || comissao.prazo }}</small>
+                @if (secaoAtual === 'historico' && comissao.concluidaEm) { <small>Conclusão {{ comissao.concluidaEm | date:'mediumDate' }}</small> }
+                <span class="status-pill">{{ comissao.status }}</span>
+                @if (pagamentoLiberado(comissao)) {
+                  <small style="color: #8bd17c; font-weight: 700;">{{ repasse.recusadaPeloCliente ? '✓ 50% do pagamento liberado' : '✓ Pagamento liberado' }}</small>
+                } @else if (comissao.pagamentoStatus === 'pago') {
+                  <small style="color: #f6c85f;">Aguardando aceite do cliente</small>
+                }
+              </div>
               @if (secaoAtual === 'comissoes' && comissao.status === 'Solicitada') { <div class="commission-actions proposal-actions"><label>Valor proposto (R$)<input type="number" min="1" step="0.01" [ngModel]="valoresProposta[comissao.id] ?? comissao.propostaValor ?? comissao.valor" (ngModelChange)="valoresProposta[comissao.id] = $event" /></label><label>Prazo estimado<input type="text" maxlength="80" [ngModel]="prazosProposta[comissao.id] ?? comissao.propostaPrazo ?? comissao.prazo" (ngModelChange)="prazosProposta[comissao.id] = $event" /></label><button type="button" class="primary-action" (click)="aceitar(comissao)">Enviar proposta</button><button type="button" class="danger-action" (click)="recusar(comissao)">Recusar</button></div> }
               @if (secaoAtual === 'comissoes' && comissao.status === 'Aguardando aprovação do cliente') { <span class="status-hint">Proposta enviada · aguardando resposta do cliente</span> }
               @if (secaoAtual === 'comissoes' && comissao.status === 'Pendente') {
                 <div class="offer-actions">
                   <button type="button" class="secondary-action" (click)="abrirDetalhesComissao(comissao)">Ver detalhes</button>
                   @if (comissao.pagamentoStatus === 'pago') {
-                    <button type="button" class="primary-action" (click)="abrirEntrega(comissao)">Enviar arte / comissão</button>
+                    <button type="button" class="primary-action" (click)="abrirEntrega(comissao, true)">Enviar comissão</button>
                   } @else {
                     <span class="status-hint">Aguardando pagamento do cliente</span>
                   }
@@ -54,16 +66,20 @@
               @if (secaoAtual === 'comissoes' && comissao.status === 'Em andamento') {
                 <div class="offer-actions">
                   <button type="button" class="secondary-action" (click)="abrirDetalhesComissao(comissao)">Ver detalhes</button>
-                  <button type="button" class="primary-action" (click)="abrirEntrega(comissao)">Enviar arte / comissão</button>
+                  <button type="button" class="primary-action" (click)="abrirEntrega(comissao, true)">Enviar comissão</button>
                 </div>
               }
               @if (secaoAtual === 'comissoes' && comissao.status === 'Entregue') {
                 <div class="offer-actions">
-                  <span class="status-hint">Arte enviada · aguardando aprovação do cliente</span>
-                  <button type="button" class="secondary-action" (click)="abrirEntrega(comissao)">Reenviar arte</button>
+                  <button type="button" class="secondary-action" (click)="abrirDetalhesComissao(comissao)">Ver detalhes</button>
+                  <span class="status-hint">Aguardando aceite</span>
                 </div>
               }
-              @if (comissao.arquivoEntrega) { <a class="delivery-link" [href]="comissao.arquivoEntrega" target="_blank" rel="noopener">Ver arte entregue ↗</a> }
+              @if (secaoAtual === 'historico' && comissao.arquivoEntrega) {
+                <div class="offer-actions">
+                  <button type="button" class="secondary-action" (click)="abrirDetalhesComissao(comissao)">Ver detalhes</button>
+                </div>
+              }
             </article>
           } @empty { <div class="empty-state"><span>✦</span><h3>Nenhuma comissão nesta seção</h3><p>Os pedidos e atualizações aparecerão aqui.</p></div> }
         </div>
@@ -75,15 +91,17 @@
         <header class="section-heading">
           <div>
             <h2>Histórico de Vendas & Pagamentos Simulados</h2>
-            <p>Acompanhe as transações financeiras simuladas vinculadas aos seus pedidos e comissões.</p>
+            <p>O pagamento das comissões é liberado após o cliente aprovar a entrega. Pedidos acima de R$ 30,00 possuem taxa de 8% da plataforma.</p>
           </div>
           <div class="reviews-summary">
             <strong>{{ receitaTotalAprovada | currency:'BRL' }}</strong>
-            <span>Receita aprovada ({{ vendasArtista.length }} transações)</span>
+            <span>Receita líquida liberada ({{ vendasArtista.length }} transações)</span>
           </div>
         </header>
         <div class="commission-list">
           @for (venda of vendasArtista; track venda.paymentId) {
+            @let repasseVenda = calcularRepasseDaVenda(venda);
+            @let liberada = vendaLiberadaParaArtista(venda);
             <article class="commission-card commission-detail">
               <div class="commission-main">
                 <h3>{{ venda.orderTitle || 'Pedido #' + venda.orderId }}</h3>
@@ -92,12 +110,16 @@
                   Cliente: <strong>{{ venda.clientName || 'Cliente ChArte' }}</strong> ·
                   Modalidade: <strong>{{ venda.method }}</strong>
                 </p>
-                <p>{{ venda.simulationDetails || 'Operação registrada no simulador financeiro.' }}</p>
+                <p>
+                  Valor pago pelo cliente: <strong>{{ repasseVenda.valorBruto | currency:'BRL' }}</strong> ·
+                  Regra: <strong>{{ repasseVenda.recusadaPeloCliente ? 'Recusada pelo cliente (50%)' : repasseVenda.temTaxa ? 'Taxa 8% (-' + (repasseVenda.valorTaxa | currency:'BRL') + ')' : 'Isento (≤ R$ 30,00)' }}</strong> ·
+                  Valor líquido do artista: <strong>{{ repasseVenda.valorLiquido | currency:'BRL' }}</strong>
+                </p>
               </div>
               <div class="commission-meta">
-                <strong>{{ venda.amount | currency:'BRL' }}</strong>
+                <strong>{{ repasseVenda.valorLiquido | currency:'BRL' }}</strong>
                 <small>{{ venda.paymentDate | date:'dd/MM/yyyy' }}</small>
-                <span class="status-pill">{{ venda.status }}</span>
+                <span class="status-pill">{{ liberada ? (repasseVenda.recusadaPeloCliente ? '50% LIBERADO AO ARTISTA' : 'LIBERADO AO ARTISTA') : 'RETIDO (AGUARDANDO ACEITE)' }}</span>
               </div>
             </article>
           } @empty {
@@ -187,7 +209,56 @@
 }
 </div>
 
-@if (entregaAtual) { <div class="dialog-backdrop" role="presentation" (click)="entregaAtual = null"><section class="delivery-dialog" role="dialog" aria-modal="true" aria-labelledby="delivery-title" (click)="$event.stopPropagation()"><button class="dialog-close" type="button" (click)="entregaAtual = null" aria-label="Fechar">×</button><h2 id="delivery-title">Enviar arte e comissão</h2><p>Entrega para {{ entregaAtual.cliente.nome }} (@{{ entregaAtual.cliente.username }}) · {{ entregaAtual.titulo }}</p><label class="upload-box">{{ arquivoSelecionado || previewEntrega ? 'Trocar imagem da arte' : 'Selecionar imagem final da arte (até 5 MB)' }}<input type="file" accept="image/*" (change)="selecionarArquivo($event)" /></label>@if (erroEntrega) { <p class="form-message">{{ erroEntrega }}</p> }@if (previewEntrega) { <img class="art-preview" [src]="previewEntrega" alt="Prévia da entrega" /> } @if (arquivoSelecionado) { <div class="file-row"><span>{{ arquivoSelecionado.name }}</span><button type="button" (click)="arquivoSelecionado = null; previewEntrega = ''">Remover</button></div> }<label>Mensagem / Observação da entrega<textarea [(ngModel)]="observacaoEntrega" rows="3" placeholder="Adicione detalhes sobre a arte enviada para o cliente avaliar..."></textarea></label><button class="primary-action" type="button" [disabled]="!previewEntrega || enviandoEntrega" (click)="enviarEntrega()">{{ enviandoEntrega ? 'Enviando comissão...' : 'Enviar arte e comissão para o cliente' }}</button></section></div> }
+<input
+  #inputArquivosComissao
+  type="file"
+  accept="image/*,.pdf,.zip,.psd,.ai,.svg"
+  multiple
+  style="display: none"
+  (change)="selecionarArquivo($event)"
+/>
+
+@if (entregaAtual) {
+  @let repasseEntrega = repasseDaComissao(entregaAtual);
+  <div class="dialog-backdrop" role="presentation" (click)="entregaAtual = null">
+    <section class="delivery-dialog" role="dialog" aria-modal="true" aria-labelledby="delivery-title" (click)="$event.stopPropagation()">
+      <button class="dialog-close" type="button" (click)="entregaAtual = null" aria-label="Fechar">×</button>
+      <h2 id="delivery-title">Enviar arquivos da comissão</h2>
+      <p>Entrega para {{ entregaAtual.cliente.nome }} (@{{ entregaAtual.cliente.username }}) · {{ entregaAtual.titulo }}</p>
+      <p style="font-size: 12px; color: #cbbdd2; margin-top: -6px;">
+        Valor pago pelo cliente: <strong>{{ repasseEntrega.valorBruto | currency:'BRL' }}</strong> ·
+        {{ repasseEntrega.temTaxa ? 'Taxa de 8%: -' + (repasseEntrega.valorTaxa | currency:'BRL') : 'Isento de taxa (≤ R$ 30,00)' }} ·
+        Você recebe após aprovação do cliente: <strong>{{ repasseEntrega.valorLiquido | currency:'BRL' }}</strong>
+      </p>
+
+      <button type="button" class="upload-box" (click)="acionarSeletorArquivosEntrega()">
+        {{ arquivosEntregaSelecionados.length || previewEntrega ? '+ Adicionar ou trocar arquivos da comissão' : 'Selecionar arquivos da comissão no dispositivo (até 10 MB)' }}
+      </button>
+
+      @if (erroEntrega) { <p class="form-message">{{ erroEntrega }}</p> }
+      @if (previewEntrega && (previewEntrega.startsWith('data:image') || previewEntrega.startsWith('http') || previewEntrega.startsWith('/'))) {
+        <img class="art-preview" [src]="previewEntrega" alt="Prévia do arquivo da comissão" />
+      }
+      @if (arquivosEntregaSelecionados.length) {
+        <div class="file-list" style="display: grid; gap: 6px; margin: 8px 0;">
+          @for (arq of arquivosEntregaSelecionados; track arq.nome + $index; let idx = $index) {
+            <div class="file-row">
+              <span>📎 {{ arq.nome }}</span>
+              <button type="button" (click)="removerArquivoEntrega(idx)">Remover</button>
+            </div>
+          }
+        </div>
+      }
+      <label>
+        Mensagem / Observação para o cliente
+        <textarea [(ngModel)]="observacaoEntrega" rows="3" placeholder="Descreva os arquivos enviados para o cliente revisar e clicar em Aprovar..."></textarea>
+      </label>
+      <button class="primary-action" type="button" [disabled]="(!previewEntrega && !arquivosEntregaSelecionados.length) || enviandoEntrega" (click)="enviarEntrega()">
+        {{ enviandoEntrega ? 'Enviando arquivos...' : 'Confirmar envio da comissão para o cliente' }}
+      </button>
+    </section>
+  </div>
+}
 
 <app-pin-card-modal></app-pin-card-modal>
 
