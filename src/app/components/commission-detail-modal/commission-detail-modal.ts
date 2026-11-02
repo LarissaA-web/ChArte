@@ -1,6 +1,11 @@
 import { CurrencyPipe } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { Comissao } from '../../models/artist-area';
+import {
+  CalculoRepasseArtista,
+  Comissao,
+  calcularRepasseComissao,
+  pagamentoLiberadoParaArtista,
+} from '../../models/artist-area';
 
 @Component({
   selector: 'app-commission-detail-modal',
@@ -14,6 +19,7 @@ export class CommissionDetailModal {
   @Output() fechar = new EventEmitter<void>();
   @Output() iniciar = new EventEmitter<void>();
   @Output() enviar = new EventEmitter<void>();
+
   get pagamentoPago(): boolean {
     return (
       this.comissao.pagamentoStatus === 'pago' ||
@@ -21,5 +27,13 @@ export class CommissionDetailModal {
       this.comissao.status === 'Entregue' ||
       this.comissao.status === 'Finalizada'
     );
+  }
+
+  get repasse(): CalculoRepasseArtista {
+    return calcularRepasseComissao(this.comissao);
+  }
+
+  get pagamentoLiberado(): boolean {
+    return pagamentoLiberadoParaArtista(this.comissao);
   }
 }

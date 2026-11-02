@@ -1,12 +1,14 @@
 import { Injectable } from '@angular/core';
 import { Observable, from, of, BehaviorSubject } from 'rxjs';
 import {
+  ArquivoEntregaComissao,
   AvaliacaoArtista,
   Comissao,
   DiretrizComissao,
   OpcaoComissao,
   PrivacidadeArtista,
   StatusComissao,
+  ehCompraDiretaArte,
 } from '../app/models/artist-area';
 import { supabase } from '../app/core/supabase/supabase.client';
 import { map, catchError, tap, switchMap } from 'rxjs/operators';
@@ -21,6 +23,7 @@ const PRIVACIDADE_PADRAO: PrivacidadeArtista = {
 const CLONAR_COMISSAO = (item: Comissao): Comissao => ({
   ...item,
   referencias: [...item.referencias],
+  arquivosEntrega: item.arquivosEntrega ? item.arquivosEntrega.map((a) => ({ ...a })) : undefined,
   cliente: { ...item.cliente },
 });
 
@@ -191,6 +194,7 @@ export class ArtistAreaService {
     const entregasLocais = this.lerMapaLocal<{
       arquivoEntrega: string;
       observacaoEntrega: string;
+      arquivosEntrega?: ArquivoEntregaComissao[];
     }>(this.ENTREGAS_STORAGE_KEY);
 
     const statusConhecidos: StatusComissao[] = [
@@ -306,29 +310,62 @@ export class ArtistAreaService {
       const refObs = refsBrutas.find(
         (r) => typeof r === 'string' && r.startsWith('ENTREGA_OBS::'),
       );
+      const refArquivosJson = refsBrutas.find(
+        (r) => typeof r === 'string' && r.startsWith('ENTREGA_ARQUIVOS_JSON::'),
+      );
       const arquivoEntregaRemoto = refArquivo
         ? refArquivo.slice('ENTREGA_ARQUIVO::'.length)
         : undefined;
       const observacaoEntregaRemota = refObs
         ? refObs.slice('ENTREGA_OBS::'.length)
         : undefined;
+      let arquivosEntregaRemotos: ArquivoEntregaComissao[] | undefined;
+      if (refArquivosJson) {
+        try {
+          arquivosEntregaRemotos = JSON.parse(
+            refArquivosJson.slice('ENTREGA_ARQUIVOS_JSON::'.length),
+          );
+        } catch {
+          arquivosEntregaRemotos = undefined;
+        }
+      }
       const referenciasLimpas = refsBrutas.filter(
         (r) =>
           typeof r === 'string' &&
           !r.startsWith('ENTREGA_ARQUIVO::') &&
-          !r.startsWith('ENTREGA_OBS::'),
+          !r.startsWith('ENTREGA_OBS::') &&
+          !r.startsWith('ENTREGA_ARQUIVOS_JSON::'),
       );
 
-      const arquivoEntregaFinal = arquivoEntregaRemoto || entregaLocal?.arquivoEntrega;
+      const compraDireta = ehCompraDiretaArte({
+        titulo: item.titulo,
+        prazo: item.prazo,
+        opcaoTitulo: item.opcao_titulo,
+      });
+
+      let arquivoEntregaFinal = arquivoEntregaRemoto || entregaLocal?.arquivoEntrega;
       const observacaoEntregaFinal = observacaoEntregaRemota ?? entregaLocal?.observacaoEntrega;
+      const arquivosEntregaFinais: ArquivoEntregaComissao[] | undefined =
+        arquivosEntregaRemotos ||
+        entregaLocal?.arquivosEntrega ||
+        (arquivoEntregaFinal ? [{ nome: 'Arquivo da comissão', url: arquivoEntregaFinal }] : undefined);
 
       if (arquivoEntregaFinal && statusFinal === 'Em andamento') {
         statusFinal = 'Entregue';
       }
 
-      if (pagLocal?.pagamentoStatus === 'pago') {
+      if (pagLocal?.pagamentoStatus === 'pago' || pagStatusFinal === 'pago') {
         pagStatusFinal = 'pago';
-        if (statusFinal === 'Pendente' || statusFinal === 'Solicitada' || statusFinal === 'Aguardando aprovação do cliente') {
+        if (compraDireta && statusFinal !== 'Cancelada' && statusFinal !== 'Recusada') {
+          statusFinal = 'Finalizada';
+          if (!arquivoEntregaFinal && referenciasLimpas.length > 0) {
+            arquivoEntregaFinal = referenciasLimpas[0];
+          }
+        } else if (
+          statusFinal === 'Pendente' ||
+          statusFinal === 'Solicitada' ||
+          statusFinal === 'Aguardando aprovação do cliente'
+        ) {
           statusFinal = 'Em andamento';
         }
       } else if (
@@ -338,6 +375,11 @@ export class ArtistAreaService {
       ) {
         pagStatusFinal = 'pago';
       }
+
+      const pagamentoLiberado =
+        (statusFinal === 'Finalizada' ||
+          (statusFinal === 'Recusada' && Boolean(arquivoEntregaFinal))) &&
+        pagStatusFinal === 'pago';
 
       return {
         id: item.id_pedido,
@@ -357,6 +399,7 @@ export class ArtistAreaService {
         concluidaEm: item.concluida_em ?? statusLocal?.concluidaEm ?? undefined,
         pagamento: mapearMetodo(pagamento?.metodo) ?? pagLocal?.pagamento,
         pagamentoStatus: pagStatusFinal,
+        pagamentoLiberado,
         paymentId: pagamento?.gateway_payment_id ?? pagLocal?.paymentId ?? undefined,
         checkoutUrl: pagamento?.checkout_url ?? pagLocal?.checkoutUrl ?? undefined,
         opcaoTitulo: item.opcao_titulo ?? undefined,
@@ -364,7 +407,9 @@ export class ArtistAreaService {
           ? Number(item.proposta_valor) : undefined,
         propostaPrazo: item.proposta_prazo ?? undefined,
         arquivoEntrega: arquivoEntregaFinal,
+        arquivosEntrega: arquivosEntregaFinais,
         observacaoEntrega: observacaoEntregaFinal,
+        tipoPedido: compraDireta ? 'compra_arte' : 'comissao',
       };
     });
 
@@ -648,10 +693,22 @@ export class ArtistAreaService {
     this.salvarMapaLocal(this.PAGAMENTOS_STORAGE_KEY, pagamentosLocais);
 
     if (status === 'pago') {
+      const pedidoAtual = this.obterComissao(id);
+      const compraDireta = ehCompraDiretaArte(pedidoAtual);
+      const concluidaEmIso = compraDireta ? new Date().toISOString() : undefined;
+      const novoStatus: StatusComissao = compraDireta
+        ? 'Finalizada'
+        : pedidoAtual?.status === 'Entregue' || pedidoAtual?.status === 'Finalizada'
+          ? pedidoAtual.status
+          : 'Em andamento';
+
       const statusLocais = this.lerMapaLocal<{ status: StatusComissao; concluidaEm?: string }>(
         this.STATUS_STORAGE_KEY,
       );
-      statusLocais[String(id)] = { status: 'Em andamento' };
+      statusLocais[String(id)] = {
+        status: novoStatus,
+        ...(concluidaEmIso ? { concluidaEm: concluidaEmIso } : {}),
+      };
       this.salvarMapaLocal(this.STATUS_STORAGE_KEY, statusLocais);
 
       this.comissoesSubject.next(
@@ -659,11 +716,14 @@ export class ArtistAreaService {
           item.id === id
             ? {
                 ...item,
-                status:
-                  item.status === 'Entregue' || item.status === 'Finalizada'
-                    ? item.status
-                    : 'Em andamento',
+                status: novoStatus,
+                concluidaEm: concluidaEmIso ?? item.concluidaEm,
                 pagamentoStatus: 'pago',
+                pagamentoLiberado: novoStatus === 'Finalizada',
+                arquivoEntrega:
+                  compraDireta && !item.arquivoEntrega && item.referencias.length > 0
+                    ? item.referencias[0]
+                    : item.arquivoEntrega,
                 paymentId: opcoes?.paymentId ?? item.paymentId,
                 pagamento: opcoes?.metodo ?? item.pagamento,
               }
@@ -673,10 +733,18 @@ export class ArtistAreaService {
 
       await supabase
         .from('pedidos_principal')
-        .update({
-          status_comissao: 'Em andamento',
-          status_pedido: 'Em Produção',
-        })
+        .update(
+          compraDireta
+            ? {
+                status_comissao: 'Finalizada',
+                status_pedido: 'Entregue',
+                concluida_em: concluidaEmIso,
+              }
+            : {
+                status_comissao: 'Em andamento',
+                status_pedido: 'Em Produção',
+              },
+        )
         .eq('id_pedido', id);
     } else if (opcoes?.reembolso) {
       const statusLocais = this.lerMapaLocal<{ status: StatusComissao; concluidaEm?: string }>(
@@ -735,6 +803,7 @@ export class ArtistAreaService {
     arquivoEntrega: string,
     observacaoEntrega: string,
     arquivoFile?: File,
+    arquivosExtras?: ArquivoEntregaComissao[],
   ): Promise<boolean> {
     let urlFinal = arquivoEntrega;
 
@@ -764,11 +833,21 @@ export class ArtistAreaService {
       }
     }
 
+    const listaArquivos: ArquivoEntregaComissao[] =
+      arquivosExtras && arquivosExtras.length > 0
+        ? arquivosExtras.map((arq, idx) => (idx === 0 ? { ...arq, url: urlFinal || arq.url } : arq))
+        : [{ nome: arquivoFile?.name || 'Arquivo da comissão', url: urlFinal, tipo: arquivoFile?.type }];
+
     const entregasLocais = this.lerMapaLocal<{
       arquivoEntrega: string;
       observacaoEntrega: string;
+      arquivosEntrega?: ArquivoEntregaComissao[];
     }>(this.ENTREGAS_STORAGE_KEY);
-    entregasLocais[String(id)] = { arquivoEntrega: urlFinal, observacaoEntrega };
+    entregasLocais[String(id)] = {
+      arquivoEntrega: urlFinal,
+      observacaoEntrega,
+      arquivosEntrega: listaArquivos,
+    };
     this.salvarMapaLocal(this.ENTREGAS_STORAGE_KEY, entregasLocais);
 
     const statusLocais = this.lerMapaLocal<{ status: StatusComissao; concluidaEm?: string }>(
@@ -782,11 +861,13 @@ export class ArtistAreaService {
       (r) =>
         typeof r === 'string' &&
         !r.startsWith('ENTREGA_ARQUIVO::') &&
-        !r.startsWith('ENTREGA_OBS::'),
+        !r.startsWith('ENTREGA_OBS::') &&
+        !r.startsWith('ENTREGA_ARQUIVOS_JSON::'),
     );
     const referenciasComEntrega = [
       ...refsCliente,
       `ENTREGA_ARQUIVO::${urlFinal}`,
+      `ENTREGA_ARQUIVOS_JSON::${JSON.stringify(listaArquivos)}`,
       ...(observacaoEntrega ? [`ENTREGA_OBS::${observacaoEntrega}`] : []),
     ];
 
@@ -816,7 +897,9 @@ export class ArtistAreaService {
               ...item,
               status: 'Entregue',
               pagamentoStatus: 'pago',
+              pagamentoLiberado: false,
               arquivoEntrega: urlFinal,
+              arquivosEntrega: listaArquivos,
               observacaoEntrega,
             }
           : item,
@@ -828,7 +911,42 @@ export class ArtistAreaService {
   }
 
   async aprovarEntregaCliente(id: number): Promise<boolean> {
-    return this.atualizarStatus(id, 'Finalizada');
+    const ok = await this.atualizarStatus(id, 'Finalizada');
+    if (ok) {
+      this.comissoesSubject.next(
+        this.comissoesSubject.value.map((item) =>
+          item.id === id
+            ? { ...item, status: 'Finalizada', pagamentoStatus: 'pago', pagamentoLiberado: true }
+            : item,
+        ),
+      );
+    }
+    return ok;
+  }
+
+  async recusarEntregaCliente(id: number): Promise<boolean> {
+    const concluidaEmIso = new Date().toISOString();
+    const ok = await this.atualizarStatus(id, 'Recusada');
+    const statusLocais = this.lerMapaLocal<{ status: StatusComissao; concluidaEm?: string }>(
+      this.STATUS_STORAGE_KEY,
+    );
+    statusLocais[String(id)] = { status: 'Recusada', concluidaEm: concluidaEmIso };
+    this.salvarMapaLocal(this.STATUS_STORAGE_KEY, statusLocais);
+
+    this.comissoesSubject.next(
+      this.comissoesSubject.value.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: 'Recusada',
+              concluidaEm: concluidaEmIso,
+              pagamentoStatus: 'pago',
+              pagamentoLiberado: true,
+            }
+          : item,
+      ),
+    );
+    return ok;
   }
 
   async solicitarRevisaoEntrega(id: number): Promise<boolean> {

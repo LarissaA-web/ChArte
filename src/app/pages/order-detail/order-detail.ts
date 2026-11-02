@@ -4,7 +4,15 @@ import { CommonModule, CurrencyPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ArtistAreaService } from '../../../services/artist-area.service';
 import { AuthService } from '../../../services/auth.service';
-import { Comissao } from '../../models/artist-area';
+import {
+  CalculoRepasseArtista,
+  Comissao,
+  calcularRepasseArtista,
+  calcularRepasseComissao,
+  ehCompraDiretaArte,
+  entregaFoiRecusadaPeloCliente,
+  pagamentoLiberadoParaArtista,
+} from '../../models/artist-area';
 import { PaymentService, PaymentView } from '../../../services/payment.service';
 import { Subscription, combineLatest } from 'rxjs';
 
@@ -42,123 +50,102 @@ import { Subscription, combineLatest } from 'rxjs';
                 </span>
               </div>
 
-              <ol class="status-timeline">
-                <li class="done">
-                  <i></i>
-                  <div>
-                    <strong>Solicitação registrada</strong>
-                    <small>Pedido vinculado ao artista @{{ pedido.artistaUsername }}</small>
-                  </div>
-                </li>
-                <li [class.done]="pedido.status !== 'Solicitada' && pedido.status !== 'Recusada' && pedido.status !== 'Cancelada'">
-                  <i></i>
-                  <div>
-                    <strong>Condições da contratação</strong>
-                    <small>{{
-                      pedido.status === 'Solicitada'
-                        ? 'Aguardando análise da artista'
-                        : pedido.status === 'Recusada'
-                          ? 'Solicitação recusada'
-                          : 'Valor e prazo definidos para o pedido'
-                    }}</small>
-                  </div>
-                </li>
-                <li [class.done]="pedido.pagamentoStatus === 'pago'" [class.waiting]="pedido.status === 'Pendente' && pedido.pagamentoStatus !== 'pago'">
-                  <i></i>
-                  <div>
-                    <strong>{{ pedido.pagamentoStatus === 'pago' ? 'Pagamento aprovado (Simulado)' : 'Pagamento simulado' }}</strong>
-                    <small>{{
-                      pedido.pagamentoStatus === 'pago'
-                        ? 'Transação aprovada pelo simulador financeiro interno'
-                        : pedido.status === 'Pendente'
-                          ? 'Escolha uma modalidade ao lado para concluir a contratação'
-                          : 'Disponível após aprovação do orçamento'
-                    }}</small>
-                  </div>
-                </li>
-                <li [class.done]="pedido.status === 'Em andamento' || pedido.status === 'Entregue' || pedido.status === 'Finalizada'">
-                  <i></i>
-                  <div>
-                    <strong>Em produção</strong>
-                    <small>O artista produz e prepara os arquivos da sua arte</small>
-                  </div>
-                </li>
-                <li [class.done]="pedido.status === 'Entregue' || pedido.status === 'Finalizada'" [class.waiting]="pedido.status === 'Em andamento'">
-                  <i></i>
-                  <div>
-                    <strong>Arte enviada pelo artista</strong>
-                    <small>{{
-                      pedido.status === 'Entregue'
-                        ? 'Imagem enviada! Revise abaixo e aprove para concluir a comissão'
-                        : pedido.status === 'Finalizada'
-                          ? 'Arte entregue pelo artista'
-                          : 'Aguardando envio da arte pelo artista'
-                    }}</small>
-                  </div>
-                </li>
-                <li [class.done]="pedido.status === 'Finalizada'" [class.waiting]="pedido.status === 'Entregue'">
-                  <i></i>
-                  <div>
-                    <strong>Comissão aprovada e concluída</strong>
-                    <small>{{
-                      pedido.status === 'Finalizada'
-                        ? 'Imagem aprovada pelo cliente · comissão completa'
-                        : pedido.status === 'Entregue'
-                          ? 'Aguardando aprovação da imagem pelo cliente'
-                          : 'Concluída após aprovação da arte pelo cliente'
-                    }}</small>
-                  </div>
-                </li>
-              </ol>
-
-              @if (pedido.status === 'Entregue' || pedido.status === 'Finalizada' || pedido.arquivoEntrega) {
-                <div class="delivery-result">
-                  <div class="delivery-header">
-                    <span class="detail-label">{{ pedido.status === 'Finalizada' ? 'COMISSÃO COMPLETA' : 'ENTREGA DO ARTISTA' }}</span>
-                    <h3>{{ pedido.status === 'Finalizada' ? 'Arte final aprovada' : 'Arte enviada para sua aprovação' }}</h3>
-                  </div>
-                  @if (pedido.arquivoEntrega) {
-                    <img [src]="pedido.arquivoEntrega" alt="Arte entregue pelo artista" />
-                    <div class="delivery-links">
-                      <a [href]="pedido.arquivoEntrega" target="_blank" rel="noopener" download="comissao-charte.png">
-                        Abrir / Baixar imagem original ↗
-                      </a>
+              @if (ehCompraDireta) {
+                <ol class="status-timeline">
+                  <li class="done">
+                    <i></i>
+                    <div>
+                      <strong>Obra selecionada para compra</strong>
+                      <small>Obra de @{{ pedido.artistaUsername }} pronta para aquisição imediata</small>
                     </div>
-                  }
-                  @if (pedido.observacaoEntrega) {
-                    <p class="delivery-note"><strong>Mensagem do artista:</strong> {{ pedido.observacaoEntrega }}</p>
-                  }
-
-                  @if (pedido.status === 'Entregue' && ehClienteDoPedido) {
-                    <div class="delivery-approval-box">
-                      <h4>Aprovar imagem da comissão?</h4>
-                      <p>Confira a arte enviada pelo artista. Ao aprovar a imagem, a comissão será dada como completa.</p>
-                      @if (statusMensagem) {
-                        <p class="payment-message" [class.error]="statusErro" aria-live="polite">{{ statusMensagem }}</p>
-                      }
-                      <div class="approval-actions">
-                        <button type="button" class="pay-button approve-delivery-btn" [disabled]="statusCarregando" (click)="aprovarEntrega()">
-                          {{ statusCarregando ? 'Confirmando…' : '✓ Aprovar imagem e concluir comissão' }}
-                        </button>
-                        <button type="button" class="cancel-order revision-btn" [disabled]="statusCarregando" (click)="solicitarAjustesEntrega()">
-                          Solicitar ajustes na arte
-                        </button>
-                      </div>
+                  </li>
+                  <li [class.done]="pedido.pagamentoStatus === 'pago' || pedido.status === 'Finalizada'" [class.waiting]="pedido.pagamentoStatus !== 'pago'">
+                    <i></i>
+                    <div>
+                      <strong>{{ pedido.pagamentoStatus === 'pago' || pedido.status === 'Finalizada' ? 'Pagamento aprovado e compra concluída' : 'Pagamento da compra' }}</strong>
+                      <small>{{
+                        pedido.pagamentoStatus === 'pago' || pedido.status === 'Finalizada'
+                          ? 'Processo de compra finalizado! Sua obra já está liberada abaixo.'
+                          : 'Confirme o pagamento ao lado para encerrar a compra.'
+                      }}</small>
                     </div>
-                  } @else if (pedido.status === 'Entregue' && !ehClienteDoPedido) {
-                    <div class="delivery-approval-box waiting-client">
-                      <strong>Aguardando aprovação do cliente</strong>
-                      <p>A comissão será marcada como concluída assim que o cliente aprovar a imagem enviada.</p>
+                  </li>
+                </ol>
+              } @else {
+                <ol class="status-timeline">
+                  <li class="done">
+                    <i></i>
+                    <div>
+                      <strong>Solicitação registrada</strong>
+                      <small>Pedido vinculado ao artista @{{ pedido.artistaUsername }}</small>
                     </div>
-                  } @else if (pedido.status === 'Finalizada') {
-                    <div class="delivery-approval-box completed-box">
-                      <strong>✓ Imagem aprovada pelo cliente · Comissão concluída!</strong>
-                      @if (pedido.concluidaEm) {
-                        <small>Concluída em {{ pedido.concluidaEm | date:'dd/MM/yyyy' }}</small>
-                      }
+                  </li>
+                  <li [class.done]="(pedido.status !== 'Solicitada' && pedido.status !== 'Recusada' && pedido.status !== 'Cancelada') || entregaRecusadaPeloCliente">
+                    <i></i>
+                    <div>
+                      <strong>Condições da contratação</strong>
+                      <small>{{
+                        pedido.status === 'Solicitada'
+                          ? 'Aguardando análise da artista'
+                          : pedido.status === 'Recusada' && !entregaRecusadaPeloCliente
+                            ? 'Solicitação recusada'
+                            : 'Valor e prazo definidos para o pedido'
+                      }}</small>
                     </div>
-                  }
-                </div>
+                  </li>
+                  <li [class.done]="pedido.pagamentoStatus === 'pago'" [class.waiting]="pedido.status === 'Pendente' && pedido.pagamentoStatus !== 'pago'">
+                    <i></i>
+                    <div>
+                      <strong>{{ pedido.pagamentoStatus === 'pago' ? 'Pagamento aprovado (Retido até aceite)' : 'Pagamento simulado' }}</strong>
+                      <small>{{
+                        pedido.pagamentoStatus === 'pago'
+                          ? 'Valor confirmado e retido · será liberado ao artista conforme seu aceite abaixo'
+                          : pedido.status === 'Pendente'
+                            ? 'Escolha uma modalidade ao lado para concluir a contratação'
+                            : 'Disponível após aprovação do orçamento'
+                      }}</small>
+                    </div>
+                  </li>
+                  <li [class.done]="pedido.status === 'Em andamento' || pedido.status === 'Entregue' || pedido.status === 'Finalizada' || entregaRecusadaPeloCliente">
+                    <i></i>
+                    <div>
+                      <strong>Em produção</strong>
+                      <small>O artista produz e prepara os arquivos da sua comissão</small>
+                    </div>
+                  </li>
+                  <li [class.done]="pedido.status === 'Entregue' || pedido.status === 'Finalizada' || entregaRecusadaPeloCliente" [class.waiting]="pedido.status === 'Em andamento'">
+                    <i></i>
+                    <div>
+                      <strong>Imagem enviada pelo artista</strong>
+                      <small>{{
+                        pedido.status === 'Entregue'
+                          ? 'Imagem enviada! Confira abaixo do histórico e clique em Aceitar ou Recusar'
+                          : pedido.status === 'Finalizada' || entregaRecusadaPeloCliente
+                            ? 'Imagem entregue pelo artista'
+                            : 'Aguardando o artista enviar a imagem da comissão'
+                      }}</small>
+                    </div>
+                  </li>
+                  <li [class.done]="pedido.status === 'Finalizada' || entregaRecusadaPeloCliente" [class.waiting]="pedido.status === 'Entregue'">
+                    <i></i>
+                    <div>
+                      <strong>{{
+                        entregaRecusadaPeloCliente
+                          ? 'Comissão recusada (50% liberado ao artista)'
+                          : 'Comissão finalizada e pagamento liberado'
+                      }}</strong>
+                      <small>{{
+                        pedido.status === 'Finalizada'
+                          ? 'Comissão aceita pelo cliente · pagamento liberado para o artista'
+                          : entregaRecusadaPeloCliente
+                            ? 'Entrega recusada pelo cliente · o artista recebeu 50% do pagamento'
+                            : pedido.status === 'Entregue'
+                              ? 'Aguardando você aceitar ou recusar a entrega abaixo do histórico'
+                              : 'Concluída após avaliação do cliente'
+                      }}</small>
+                    </div>
+                  </li>
+                </ol>
               }
             </section>
 
@@ -191,6 +178,96 @@ import { Subscription, combineLatest } from 'rxjs';
                 <p class="empty-tx">Nenhuma tentativa de pagamento registrada para este pedido ainda.</p>
               }
             </section>
+
+            <!-- IMAGEM ENVIADA PELO ARTISTA E AÇÕES DE ACEITAR / RECUSAR EMBAIXO DO HISTÓRICO -->
+            @if (pedido.status === 'Entregue' || pedido.status === 'Finalizada' || entregaRecusadaPeloCliente || pedido.arquivoEntrega) {
+              <section class="detail-card delivery-card">
+                <div class="delivery-result" style="margin-top: 0;">
+                  <div class="delivery-header">
+                    <span class="detail-label">{{
+                      ehCompraDireta
+                        ? 'COMPRA CONCLUÍDA'
+                        : pedido.status === 'Finalizada'
+                          ? 'COMISSÃO FINALIZADA'
+                          : entregaRecusadaPeloCliente
+                            ? 'ENTREGA RECUSADA PELO CLIENTE'
+                            : 'ENTREGA DO ARTISTA'
+                    }}</span>
+                    <h3>{{
+                      ehCompraDireta
+                        ? 'Obra adquirida disponível'
+                        : pedido.status === 'Finalizada'
+                          ? 'Imagem aprovada da comissão'
+                          : entregaRecusadaPeloCliente
+                            ? 'Imagem enviada pelo artista (Comissão recusada)'
+                            : 'Imagem enviada pelo artista'
+                    }}</h3>
+                  </div>
+
+                  @if (pedido.arquivoEntrega) {
+                    <img [src]="pedido.arquivoEntrega" alt="Imagem enviada pelo artista" />
+                    <div class="delivery-links">
+                      <a [href]="pedido.arquivoEntrega" target="_blank" rel="noopener" download="arte-charte.png">
+                        Abrir / Baixar imagem enviada ↗
+                      </a>
+                    </div>
+                  }
+                  @if (pedido.arquivosEntrega && pedido.arquivosEntrega.length > 0) {
+                    <div class="delivery-links" style="display: grid; gap: 6px;">
+                      @for (arq of pedido.arquivosEntrega; track arq.nome + $index) {
+                        <a [href]="arq.url" target="_blank" rel="noopener" [attr.download]="arq.nome">
+                          📎 Baixar arquivo: {{ arq.nome }} ↗
+                        </a>
+                      }
+                    </div>
+                  }
+                  @if (pedido.observacaoEntrega) {
+                    <p class="delivery-note"><strong>Mensagem do artista:</strong> {{ pedido.observacaoEntrega }}</p>
+                  }
+
+                  @if (!ehCompraDireta && pedido.status === 'Entregue' && ehClienteDoPedido) {
+                    <div class="delivery-approval-box">
+                      <h4>Avaliar entrega da comissão</h4>
+                      <p>
+                        Se você <strong>Aceitar</strong>, a comissão é finalizada e o artista recebe o pagamento líquido de
+                        <strong>{{ repasseAceite.valorLiquido | currency:'BRL' }}</strong>
+                        ({{ repasseAceite.temTaxa ? 'com 8% de taxa descontada por ser > R$ 30,00' : 'sem taxa por ser ≤ R$ 30,00' }}).
+                        Se você <strong>Recusar</strong>, o artista recebe <strong>50% do pagamento ({{ repasseRecusa.valorLiquido | currency:'BRL' }})</strong>.
+                      </p>
+                      @if (statusMensagem) {
+                        <p class="payment-message" [class.error]="statusErro" aria-live="polite">{{ statusMensagem }}</p>
+                      }
+                      <div class="approval-actions">
+                        <button type="button" class="pay-button approve-delivery-btn" [disabled]="statusCarregando" (click)="aprovarEntrega()">
+                          {{ statusCarregando ? 'Processando…' : 'Aceitar' }}
+                        </button>
+                        <button type="button" class="cancel-order revision-btn" [disabled]="statusCarregando" (click)="recusarEntrega()">
+                          {{ statusCarregando ? 'Processando…' : 'Recusar' }}
+                        </button>
+                      </div>
+                    </div>
+                  } @else if (!ehCompraDireta && pedido.status === 'Entregue' && !ehClienteDoPedido) {
+                    <div class="delivery-approval-box waiting-client">
+                      <strong>Aguardando aceite</strong>
+                      <p>Assim que o cliente aceitar a imagem, a comissão será finalizada e o pagamento líquido de {{ repasseArtista.valorLiquido | currency:'BRL' }} será liberado para você (ou 50% caso seja recusada).</p>
+                    </div>
+                  } @else if (entregaRecusadaPeloCliente) {
+                    <div class="delivery-approval-box refused-box">
+                      <strong>Comissão recusada pelo cliente · Artista recebeu 50% do pagamento</strong>
+                      <small>Repasse de 50% liberado ao artista: {{ repasseArtista.valorLiquido | currency:'BRL' }}</small>
+                    </div>
+                  } @else if (pedido.status === 'Finalizada') {
+                    <div class="delivery-approval-box completed-box">
+                      <strong>{{ ehCompraDireta ? '✓ Pagamento confirmado · Compra concluída!' : '✓ Comissão finalizada · Pagamento liberado para o artista!' }}</strong>
+                      <small>Repasse líquido ao artista: {{ repasseArtista.valorLiquido | currency:'BRL' }} ({{ repasseArtista.temTaxa ? '8% de taxa aplicada' : 'isento de taxa ≤ R$ 30,00' }})</small>
+                      @if (pedido.concluidaEm) {
+                        <small>Concluída em {{ pedido.concluidaEm | date:'dd/MM/yyyy' }}</small>
+                      }
+                    </div>
+                  }
+                </div>
+              </section>
+            }
           </div>
 
           <aside class="detail-card summary-card">
@@ -208,6 +285,37 @@ import { Subscription, combineLatest } from 'rxjs';
               <div>
                 <dt>Valor total</dt>
                 <dd class="price-highlight">{{ valorEfetivo | currency:'BRL' }}</dd>
+              </div>
+              @if (entregaRecusadaPeloCliente) {
+                <div>
+                  <dt>Retenção por recusa (50%)</dt>
+                  <dd>- {{ repasseArtista.valorTaxa | currency:'BRL' }}</dd>
+                </div>
+                <div>
+                  <dt>Repasse ao artista (50%)</dt>
+                  <dd><strong>{{ repasseArtista.valorLiquido | currency:'BRL' }}</strong></dd>
+                </div>
+              } @else {
+                <div>
+                  <dt>Taxa ChArte ({{ repasseArtista.temTaxa ? '8% > R$ 30' : 'Isento ≤ R$ 30' }})</dt>
+                  <dd>{{ repasseArtista.temTaxa ? ('- ' + (repasseArtista.valorTaxa | currency:'BRL')) : 'R$ 0,00' }}</dd>
+                </div>
+                <div>
+                  <dt>Repasse líquido ao artista</dt>
+                  <dd><strong>{{ repasseArtista.valorLiquido | currency:'BRL' }}</strong></dd>
+                </div>
+              }
+              <div>
+                <dt>Liberação ao artista</dt>
+                <dd>{{
+                  entregaRecusadaPeloCliente
+                    ? '✓ 50% liberado ao artista'
+                    : pagamentoJaLiberado
+                      ? '✓ Liberado ao artista'
+                      : pedido.pagamentoStatus === 'pago'
+                        ? 'Aguardando aceite'
+                        : 'Após pagamento/aceite'
+                }}</dd>
               </div>
               <div>
                 <dt>Modalidade</dt>
@@ -618,6 +726,7 @@ import { Subscription, combineLatest } from 'rxjs';
     .approve-delivery-btn{background:linear-gradient(135deg,#2d8a56,#1f663e)!important;margin-top:0}
     .revision-btn{margin-top:0!important;padding:9px!important;font-size:12px}
     .delivery-approval-box.completed-box{background:#182b22;border-color:#2e6144;color:#b8f2c9}
+    .delivery-approval-box.refused-box{background:#351a1e;border-color:#783741;color:#ffb8bd}
     .delivery-approval-box.waiting-client{background:#2b2418;border-color:#6b5635;color:#f2d194}
     .missing-order{padding:100px 0;text-align:center}
     .missing-order p{color:#aaa0af}
@@ -653,6 +762,30 @@ export class OrderDetail implements OnInit, OnDestroy {
     return Number(this.pedido?.propostaValor ?? this.pedido?.valor ?? 0);
   }
 
+  get ehCompraDireta(): boolean {
+    return ehCompraDiretaArte(this.pedido);
+  }
+
+  get repasseArtista(): CalculoRepasseArtista {
+    return calcularRepasseComissao(this.pedido);
+  }
+
+  get repasseAceite(): CalculoRepasseArtista {
+    return calcularRepasseArtista(this.valorEfetivo, false);
+  }
+
+  get repasseRecusa(): CalculoRepasseArtista {
+    return calcularRepasseArtista(this.valorEfetivo, true);
+  }
+
+  get entregaRecusadaPeloCliente(): boolean {
+    return entregaFoiRecusadaPeloCliente(this.pedido);
+  }
+
+  get pagamentoJaLiberado(): boolean {
+    return pagamentoLiberadoParaArtista(this.pedido);
+  }
+
   get podePagar(): boolean {
     if (!this.pedido) return false;
     return (
@@ -675,11 +808,17 @@ export class OrderDetail implements OnInit, OnDestroy {
 
   get statusExibido(): string {
     if (!this.pedido) return '';
+    if (this.ehCompraDireta && (this.pedido.status === 'Finalizada' || this.pedido.pagamentoStatus === 'pago')) {
+      return 'Compra concluída';
+    }
+    if (this.entregaRecusadaPeloCliente) {
+      return 'Comissão recusada · 50% pago ao artista';
+    }
     if (this.pedido.status === 'Entregue') {
-      return 'Arte enviada · Aguardando aprovação';
+      return 'Imagem enviada · Aguardando aceite';
     }
     if (this.pedido.status === 'Finalizada') {
-      return 'Comissão concluída';
+      return 'Comissão finalizada · Pagamento liberado';
     }
     if (this.pedido.pagamentoStatus === 'pago' && this.pedido.status === 'Pendente') {
       return 'Pago · Em produção';
@@ -737,6 +876,9 @@ export class OrderDetail implements OnInit, OnDestroy {
 
       if (encontrado && pertenceAoUsuario) {
         this.pedido = { ...encontrado };
+        if (this.ehCompraDireta && this.podePagar) {
+          this.checkoutAtivo = true;
+        }
         if (!dadosPagamentoCarregados) {
           dadosPagamentoCarregados = true;
           void this.carregarDadosPagamento(encontrado.id);
@@ -879,16 +1021,25 @@ export class OrderDetail implements OnInit, OnDestroy {
       );
       await this.artistData.recarregarComissoes();
       const comissaoAtualizada = this.artistData.obterComissao(pedidoId);
+      const compraDireta = ehCompraDiretaArte(comissaoAtualizada ?? this.pedido);
       if (comissaoAtualizada) {
         this.pedido = {
           ...comissaoAtualizada,
           pagamentoStatus: aprovado ? 'pago' : 'falhou',
           status:
-            aprovado &&
-            comissaoAtualizada.status !== 'Entregue' &&
-            comissaoAtualizada.status !== 'Finalizada'
-              ? 'Em andamento'
+            aprovado
+              ? compraDireta
+                ? 'Finalizada'
+                : comissaoAtualizada.status !== 'Entregue' &&
+                    comissaoAtualizada.status !== 'Finalizada'
+                  ? 'Em andamento'
+                  : comissaoAtualizada.status
               : comissaoAtualizada.status,
+          pagamentoLiberado: aprovado && compraDireta ? true : comissaoAtualizada.pagamentoLiberado,
+          arquivoEntrega:
+            aprovado && compraDireta && !comissaoAtualizada.arquivoEntrega && comissaoAtualizada.referencias.length > 0
+              ? comissaoAtualizada.referencias[0]
+              : comissaoAtualizada.arquivoEntrega,
           paymentId: resultado.paymentId || comissaoAtualizada.paymentId,
           pagamento: resultado.method || comissaoAtualizada.pagamento,
         };
@@ -898,9 +1049,10 @@ export class OrderDetail implements OnInit, OnDestroy {
       if (aprovado) {
         this.checkoutAtivo = false;
         this.pagamentoErro = false;
-        this.pagamentoMensagem =
-          resultado.simulationDetails ||
-          'Pagamento simulado aprovado com sucesso! A comissão já está em andamento.';
+        this.pagamentoMensagem = compraDireta
+          ? 'Pagamento aprovado! Compra concluída com sucesso.'
+          : resultado.simulationDetails ||
+            'Pagamento simulado aprovado! O valor fica retido até você aprovar a entrega da comissão.';
       } else {
         this.checkoutAtivo = false;
         this.pagamentoErro = true;
@@ -1095,11 +1247,41 @@ export class OrderDetail implements OnInit, OnDestroy {
 
       const comissao = this.artistData.obterComissao(this.pedido.id);
       if (comissao) {
-        this.pedido = { ...comissao, status: 'Finalizada' };
+        this.pedido = { ...comissao, status: 'Finalizada', pagamentoLiberado: true };
       }
-      this.statusMensagem = 'Arte aprovada com sucesso! A comissão foi concluída.';
+      this.statusMensagem = `Comissão finalizada! Pagamento liberado para o artista.`;
     } catch {
       this.statusMensagem = 'Ocorreu um erro ao aprovar a entrega.';
+      this.statusErro = true;
+    } finally {
+      this.statusCarregando = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async recusarEntrega(): Promise<void> {
+    if (!this.pedido || this.pedido.status !== 'Entregue' || this.statusCarregando) return;
+
+    this.statusCarregando = true;
+    this.statusMensagem = '';
+    this.statusErro = false;
+    this.cdr.detectChanges();
+
+    try {
+      const ok = await this.artistData.recusarEntregaCliente(this.pedido.id);
+      if (!ok) {
+        this.statusMensagem = 'Não foi possível recusar a entrega no momento.';
+        this.statusErro = true;
+        return;
+      }
+
+      const comissao = this.artistData.obterComissao(this.pedido.id);
+      if (comissao) {
+        this.pedido = { ...comissao, status: 'Recusada', pagamentoLiberado: true };
+      }
+      this.statusMensagem = `Entrega recusada. O artista recebeu 50% do pagamento (${this.repasseRecusa.valorLiquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`;
+    } catch {
+      this.statusMensagem = 'Ocorreu um erro ao recusar a entrega.';
       this.statusErro = true;
     } finally {
       this.statusCarregando = false;

@@ -1,5 +1,49 @@
 <app-search-bar [showSearchCard]="true"></app-search-bar>
 
+<section class="event-banner-container" aria-label="Anúncio de eventos ChArte">
+  <div class="event-banner-card">
+    <img
+      class="event-banner-image"
+      [src]="eventoAtivo.imagem"
+      [alt]="eventoAtivo.titulo"
+    />
+    <div class="event-banner-overlay"></div>
+
+    <div class="event-banner-content">
+      <div class="event-banner-badges">
+        <span class="event-badge-live">✦ {{ eventoAtivo.tag }}</span>
+        <span class="event-badge-date">{{ eventoAtivo.data }}</span>
+      </div>
+
+      <h2 class="event-banner-title">{{ eventoAtivo.titulo }}</h2>
+      <p class="event-banner-subtitle">{{ eventoAtivo.descricao }}</p>
+
+      <div class="event-banner-footer">
+        <button
+          type="button"
+          class="event-banner-cta"
+          (click)="explorarEvento(eventoAtivo.filtro)"
+        >
+          {{ eventoAtivo.acao }} →
+        </button>
+      </div>
+    </div>
+
+    <div class="event-banner-dots" role="tablist" aria-label="Alternar eventos em destaque">
+      @for (evento of eventosDestaque; track evento.id; let i = $index) {
+        <button
+          type="button"
+          class="event-dot"
+          [class.active]="indiceEventoAtivo === i"
+          [attr.aria-label]="'Evento: ' + evento.titulo"
+          [attr.aria-selected]="indiceEventoAtivo === i"
+          (click)="selecionarEvento(i)"
+        ></button>
+      }
+    </div>
+  </div>
+</section>
+
 <app-swipeables-cards></app-swipeables-cards>
 
 <!--
