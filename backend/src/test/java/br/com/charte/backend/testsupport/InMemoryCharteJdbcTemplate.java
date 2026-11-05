@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -58,12 +59,27 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
     public static class PaymentRow {
         public Long idPagamento;
         public Long idPedido;
+        public Long idCliente;
+        public Long idArtista;
+        public BigDecimal valor;
         public String metodo;
         public String statusPagamento;
         public LocalDate dataPagamento;
         public String gatewayPaymentId;
         public String checkoutUrl;
         public String gatewayStatus;
+        public BigDecimal taxaPercentual = BigDecimal.ZERO;
+        public BigDecimal taxaPlataforma = BigDecimal.ZERO;
+        public BigDecimal valorArtista = BigDecimal.ZERO;
+    }
+
+    public static class MovementRow {
+        public Long idPagamento;
+        public Long idCliente;
+        public Long idArtista;
+        public String tipo;
+        public BigDecimal valor;
+        public String descricao;
     }
 
     public static class FollowRow {
@@ -74,17 +90,26 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
 
     private final List<UserRow> users = new ArrayList<>();
     private final Map<Long, String> artists = new HashMap<>();
+    private final Map<Long, Long> artistUserIds = new HashMap<>();
     private final List<OrderRow> orders = new ArrayList<>();
     private final List<PaymentRow> payments = new ArrayList<>();
+    private final List<MovementRow> movements = new ArrayList<>();
     private final List<FollowRow> follows = new ArrayList<>();
     private final AtomicLong paymentSeq = new AtomicLong(1);
     private final AtomicLong followSeq = new AtomicLong(1);
+    private volatile boolean failPaymentInsert;
+    private volatile boolean failMovementInsert;
 
     public void addUser(Long id, String idAuth, String username, String fullName, boolean isArtist) {
         users.add(new UserRow(id, idAuth, username, fullName));
         if (isArtist) {
             artists.put(id, username);
+            artistUserIds.put(id, id);
         }
+    }
+
+    public void associateArtistUser(Long artistId, Long userId) {
+        artistUserIds.put(artistId, userId);
     }
 
     public void addOrder(Long idPedido, Long idCliente, Long idArtista, BigDecimal valorTotal, String status, String titulo) {
@@ -95,14 +120,40 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
         return payments.size();
     }
 
+    public PaymentRow latestPayment() {
+        return payments.isEmpty() ? null : payments.get(payments.size() - 1);
+    }
+
+    public void failPaymentInsert(boolean fail) {
+        this.failPaymentInsert = fail;
+    }
+
+    public void failMovementInsert(boolean fail) {
+        this.failMovementInsert = fail;
+    }
+
+    public int countRetentionMovements() {
+        return (int) movements.stream().filter(m -> "credito_retido".equals(m.tipo)).count();
+    }
+
+    public MovementRow latestRetentionMovement() {
+        return movements.stream().filter(m -> "credito_retido".equals(m.tipo)).reduce((first, second) -> second).orElse(null);
+    }
+
     @Override
-    public int update(String sql, Object... args) {
+    public synchronized int update(String sql, Object... args) {
         String normalized = sql.replaceAll("\\s+", " ").trim().toUpperCase(Locale.ROOT);
 
         if (normalized.startsWith("INSERT INTO PUBLIC.PAGAMENTOS")) {
+            if (failPaymentInsert) {
+                throw new DataAccessResourceFailureException("Simulated payment insert failure");
+            }
             PaymentRow row = new PaymentRow();
             row.idPagamento = paymentSeq.getAndIncrement();
             row.idPedido = ((Number) args[0]).longValue();
+            row.idCliente = ((Number) args[1]).longValue();
+            row.idArtista = ((Number) args[2]).longValue();
+            row.valor = (BigDecimal) args[3];
             if (normalized.contains("'PIX'")) {
                 row.metodo = "Pix";
             } else if (normalized.contains("'CARTÃO DE CRÉDITO'")) {
@@ -111,9 +162,9 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
                 row.metodo = "Boleto";
             }
             row.statusPagamento = "Pendente";
-            row.gatewayPaymentId = (String) args[1];
-            row.checkoutUrl = (String) args[2];
-            row.gatewayStatus = (String) args[3];
+            row.gatewayPaymentId = (String) args[4];
+            row.checkoutUrl = (String) args[5];
+            row.gatewayStatus = (String) args[6];
             payments.add(row);
             return 1;
         }
@@ -130,11 +181,17 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
 
         if (normalized.startsWith("UPDATE PUBLIC.PAGAMENTOS SET GATEWAY_STATUS =")) {
             String gatewayStatus = (String) args[0];
-            String paymentId = (String) args[1];
+            boolean hasFinanceAmounts = normalized.contains("TAXA_PERCENTUAL = ?");
+            String paymentId = (String) args[hasFinanceAmounts ? 5 : 1];
             payments.stream()
                     .filter(p -> p.gatewayPaymentId.equals(paymentId))
                     .forEach(p -> {
                         p.gatewayStatus = gatewayStatus;
+                        if (hasFinanceAmounts) {
+                            p.taxaPercentual = (BigDecimal) args[1];
+                            p.taxaPlataforma = (BigDecimal) args[2];
+                            p.valorArtista = (BigDecimal) args[3];
+                        }
                         if (normalized.contains("STATUS_PAGAMENTO = 'PAGO'")) {
                             p.statusPagamento = "Pago";
                             p.dataPagamento = LocalDate.now();
@@ -146,6 +203,21 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
                             p.statusPagamento = "Pendente";
                         }
                     });
+            return 1;
+        }
+
+        if (normalized.startsWith("INSERT INTO PUBLIC.MOVIMENTACOES_FINANCEIRAS")) {
+            if (failMovementInsert) {
+                throw new DataAccessResourceFailureException("Simulated retention movement insert failure");
+            }
+            MovementRow movement = new MovementRow();
+            movement.idPagamento = ((Number) args[0]).longValue();
+            movement.idCliente = ((Number) args[1]).longValue();
+            movement.idArtista = ((Number) args[2]).longValue();
+            movement.tipo = "credito_retido";
+            movement.valor = (BigDecimal) args[3];
+            movement.descricao = (String) args[4];
+            movements.add(movement);
             return 1;
         }
 
@@ -213,6 +285,14 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
             return requiredType.cast((int) count);
         }
 
+        if (normalized.contains("FROM PUBLIC.MOVIMENTACOES_FINANCEIRAS") && normalized.contains("SELECT COUNT(*)")) {
+            Long paymentId = ((Number) args[0]).longValue();
+            long count = movements.stream()
+                    .filter(m -> m.idPagamento.equals(paymentId) && "credito_retido".equals(m.tipo))
+                    .count();
+            return requiredType.cast((int) count);
+        }
+
         if (normalized.contains("SELECT COUNT(*) FROM PUBLIC.SEGUIDORES WHERE ID_SEGUINDO = ?")) {
             Long targetId = ((Number) args[0]).longValue();
             long count = follows.stream().filter(f -> f.idSeguindo.equals(targetId)).count();
@@ -250,6 +330,24 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
     public <T> List<T> query(String sql, RowMapper<T> rowMapper, Object... args) {
         String normalized = sql.replaceAll("\\s+", " ").trim().toUpperCase(Locale.ROOT);
         try {
+            if (normalized.contains("FROM PUBLIC.PAGAMENTOS")
+                    && normalized.contains("WHERE GATEWAY_PAYMENT_ID = ?")
+                    && normalized.contains("FOR UPDATE")) {
+                String paymentId = (String) args[0];
+                List<T> out = new ArrayList<>();
+                for (PaymentRow p : payments) {
+                    if (paymentId.equals(p.gatewayPaymentId)) {
+                        out.add(rowMapper.mapRow(mockResultSet(Map.of(
+                                "id_pagamento", p.idPagamento,
+                                "id_cliente", p.idCliente,
+                                "id_artista", p.idArtista,
+                                "valor", p.valor
+                        )), 0));
+                    }
+                }
+                return out;
+            }
+
             if (normalized.contains("FROM PUBLIC.USUARIO") && normalized.contains("WHERE CAST(ID_AUTH AS VARCHAR) = ?")) {
                 String authId = (String) args[0];
                 List<T> out = new ArrayList<>();
@@ -295,7 +393,7 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
                         cols.put("id_pedido", o.idPedido);
                         cols.put("id_cliente", o.idCliente);
                         cols.put("id_artista", o.idArtista);
-                        cols.put("id_usuario_artista", o.idArtista);
+                        cols.put("id_usuario_artista", artistUserIds.getOrDefault(o.idArtista, o.idArtista));
                         cols.put("valor_efetivo", o.valorTotal);
                         cols.put("status_pedido", o.statusPedido);
                         cols.put("status_comissao", o.statusComissao);
@@ -349,12 +447,13 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
                 return out;
             }
 
-            if (normalized.contains("FROM PUBLIC.PAGAMENTOS P") && normalized.contains("WHERE (A.ID_USUARIO = ? OR PED.ID_ARTISTA = ?)")) {
-                Long artistId = ((Number) args[0]).longValue();
+            if (normalized.contains("FROM PUBLIC.PAGAMENTOS P") && normalized.contains("WHERE A.ID_USUARIO = ? AND P.GATEWAY_PAYMENT_ID IS NOT NULL")) {
+                Long artistUserId = ((Number) args[0]).longValue();
                 List<T> out = new ArrayList<>();
                 for (PaymentRow p : payments) {
                     OrderRow o = findOrder(p.idPedido);
-                    if (o != null && artistId.equals(o.idArtista)) {
+                    Long linkedArtistUserId = o == null ? null : artistUserIds.getOrDefault(o.idArtista, o.idArtista);
+                    if (o != null && artistUserId.equals(linkedArtistUserId) && p.gatewayPaymentId != null) {
                         out.add(rowMapper.mapRow(mockPaymentResultSet(p, o), 0));
                     }
                 }
@@ -415,6 +514,8 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
         cols.put("gateway_status", p.gatewayStatus);
         cols.put("status_pagamento", p.statusPagamento);
         cols.put("checkout_url", p.checkoutUrl);
+        cols.put("valor", p.valor);
+        cols.put("id_pagamento", p.idPagamento);
         cols.put("pedido_valor", o != null ? o.valorTotal : BigDecimal.ZERO);
         cols.put("pedido_status", o != null ? o.statusComissao : "Pendente");
         cols.put("pedido_titulo", o != null ? o.titulo : "");

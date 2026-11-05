@@ -1,10 +1,14 @@
 package br.com.charte.backend.payment;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -14,6 +18,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class PaymentService {
+    private static final BigDecimal PLATFORM_FEE_RATE = new BigDecimal("0.08");
+    private static final int MONEY_SCALE = 2;
+    private static final ConcurrentHashMap<Long, ReentrantLock> CHECKOUT_LOCKS = new ConcurrentHashMap<>();
+
     private final JdbcTemplate jdbcTemplate;
     private final PaymentProvider paymentProvider;
     private final String confirmToken;
@@ -89,6 +97,13 @@ public class PaymentService {
             String nomeArtista
     ) {}
 
+    private record PaymentAccountingRow(
+            Long paymentId,
+            Long clientId,
+            Long artistId,
+            BigDecimal amount
+    ) {}
+
     @Transactional
     public PaymentView checkout(CheckoutRequest request, String authId) {
         if (request == null || request.orderId() == null) {
@@ -97,8 +112,24 @@ public class PaymentService {
         Long userId = findUserIdByAuthId(authId);
         OrderRow order = findOrderForClientOrThrow(request.orderId(), userId);
 
+        ReentrantLock checkoutLock = CHECKOUT_LOCKS.computeIfAbsent(order.idPedido(), ignored -> new ReentrantLock());
+        checkoutLock.lock();
+        try {
+            return checkoutLocked(request, order);
+        } finally {
+            checkoutLock.unlock();
+        }
+    }
+
+    private PaymentView checkoutLocked(CheckoutRequest request, OrderRow order) {
+
         if ("Cancelado".equalsIgnoreCase(order.statusPedido()) || "Cancelada".equalsIgnoreCase(order.statusComissao())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Não é possível iniciar pagamento para um pedido cancelado");
+        }
+
+        if (order.idCliente() == null || order.idArtista() == null || order.valorTotal() == null
+                || order.valorTotal().signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "O pedido não possui cliente, artista ou valor válido para pagamento");
         }
 
         if (hasApprovedPayment(order.idPedido())) {
@@ -122,7 +153,7 @@ public class PaymentService {
         }
 
         PaymentProvider.CheckoutResult created = paymentProvider.createCheckout(order.idPedido(), order.valorTotal(), method);
-        insertPaymentRecord(order.idPedido(), method, created);
+        insertPaymentRecord(order, method, created);
 
         return enrichWithOrderDetails(
                 new PaymentView(
@@ -150,6 +181,8 @@ public class PaymentService {
         Long userId = findUserIdByAuthId(authId);
         PaymentView current = findByPaymentIdInternal(paymentId);
         OrderRow order = findOrderForClientOrThrow(current.orderId(), userId);
+        lockPaymentRow(paymentId);
+        current = findByPaymentIdInternal(paymentId);
 
         PaymentStatus currentStatus = parseStatusSafe(current.status());
         if (currentStatus.isApproved()) {
@@ -266,7 +299,7 @@ public class PaymentService {
         try {
             PaymentView view = jdbcTemplate.queryForObject(
                     """
-                    SELECT p.gateway_payment_id, p.id_pedido, CAST(p.metodo AS VARCHAR) AS metodo,
+                    SELECT p.gateway_payment_id, p.id_pedido, p.valor, CAST(p.metodo AS VARCHAR) AS metodo,
                            p.gateway_status, CAST(p.status_pagamento AS VARCHAR) AS status_pagamento,
                            p.checkout_url
                     FROM public.pagamentos p
@@ -288,7 +321,7 @@ public class PaymentService {
         OrderRow order = findOrderForParticipantOrThrow(orderId, userId);
         return jdbcTemplate.query(
                 """
-                SELECT p.gateway_payment_id, p.id_pedido, CAST(p.metodo AS VARCHAR) AS metodo,
+                SELECT p.gateway_payment_id, p.id_pedido, p.valor, CAST(p.metodo AS VARCHAR) AS metodo,
                        p.gateway_status, CAST(p.status_pagamento AS VARCHAR) AS status_pagamento,
                        p.checkout_url
                 FROM public.pagamentos p
@@ -304,7 +337,7 @@ public class PaymentService {
         Long userId = findUserIdByAuthId(authId);
         return jdbcTemplate.query(
                 """
-                SELECT p.gateway_payment_id, p.id_pedido, CAST(p.metodo AS VARCHAR) AS metodo,
+                SELECT p.gateway_payment_id, p.id_pedido, p.valor, CAST(p.metodo AS VARCHAR) AS metodo,
                        p.gateway_status, CAST(p.status_pagamento AS VARCHAR) AS status_pagamento,
                        p.checkout_url,
                        COALESCE(ped.proposta_valor, ped.valor_total) AS pedido_valor,
@@ -348,7 +381,7 @@ public class PaymentService {
         Long userId = findUserIdByAuthId(authId);
         return jdbcTemplate.query(
                 """
-                SELECT p.gateway_payment_id, p.id_pedido, CAST(p.metodo AS VARCHAR) AS metodo,
+                SELECT p.gateway_payment_id, p.id_pedido, p.valor, CAST(p.metodo AS VARCHAR) AS metodo,
                        p.gateway_status, CAST(p.status_pagamento AS VARCHAR) AS status_pagamento,
                        p.checkout_url,
                        COALESCE(ped.proposta_valor, ped.valor_total) AS pedido_valor,
@@ -361,7 +394,7 @@ public class PaymentService {
                 LEFT JOIN public.usuario uc ON uc.id_usuario = ped.id_cliente
                 LEFT JOIN public.artista a ON a.id_artista = ped.id_artista
                 LEFT JOIN public.usuario ua ON ua.id_usuario = a.id_usuario
-                WHERE (a.id_usuario = ? OR ped.id_artista = ?) AND p.gateway_payment_id IS NOT NULL
+                WHERE a.id_usuario = ? AND p.gateway_payment_id IS NOT NULL
                 ORDER BY p.id_pagamento DESC
                 """,
                 (rs, rowNum) -> {
@@ -397,6 +430,8 @@ public class PaymentService {
         Long userId = findUserIdByAuthId(authId);
         PaymentView current = findByPaymentIdInternal(paymentId);
         OrderRow order = findOrderForClientOrThrow(current.orderId(), userId);
+        lockPaymentRow(paymentId);
+        current = findByPaymentIdInternal(paymentId);
 
         PaymentStatus status;
         try {
@@ -418,31 +453,37 @@ public class PaymentService {
     }
 
     private void insertPaymentRecord(
-            Long orderId,
+            OrderRow order,
             PaymentMethod method,
             PaymentProvider.CheckoutResult created
     ) {
         String sql = switch (method) {
             case PIX -> """
-                    INSERT INTO public.pagamentos (id_pedido, metodo, status_pagamento, gateway_payment_id, checkout_url, gateway_status)
-                    VALUES (?, 'Pix', 'Pendente', ?, ?, ?)
+                    INSERT INTO public.pagamentos (id_pedido, id_cliente, id_artista, valor, metodo, status_pagamento, gateway_payment_id, checkout_url, gateway_status)
+                    VALUES (?, ?, ?, ?, 'Pix', 'Pendente', ?, ?, ?)
                     """;
             case CARTAO -> """
-                    INSERT INTO public.pagamentos (id_pedido, metodo, status_pagamento, gateway_payment_id, checkout_url, gateway_status)
-                    VALUES (?, 'Cartão de Crédito', 'Pendente', ?, ?, ?)
+                    INSERT INTO public.pagamentos (id_pedido, id_cliente, id_artista, valor, metodo, status_pagamento, gateway_payment_id, checkout_url, gateway_status)
+                    VALUES (?, ?, ?, ?, 'Cartão de Crédito', 'Pendente', ?, ?, ?)
                     """;
             case TRANSFERENCIA -> """
-                    INSERT INTO public.pagamentos (id_pedido, metodo, status_pagamento, gateway_payment_id, checkout_url, gateway_status)
-                    VALUES (?, 'Boleto', 'Pendente', ?, ?, ?)
+                    INSERT INTO public.pagamentos (id_pedido, id_cliente, id_artista, valor, metodo, status_pagamento, gateway_payment_id, checkout_url, gateway_status)
+                    VALUES (?, ?, ?, ?, 'Boleto', 'Pendente', ?, ?, ?)
                     """;
         };
-        jdbcTemplate.update(
+        int insertedRows = jdbcTemplate.update(
                 sql,
-                orderId,
+                order.idPedido(),
+                order.idCliente(),
+                order.idArtista(),
+                order.valorTotal(),
                 created.paymentId(),
                 created.checkoutUrl(),
                 created.status().canonicalName()
         );
+        if (insertedRows != 1) {
+            throw new DataAccessResourceFailureException("O Supabase não confirmou a gravação do pagamento.");
+        }
     }
 
     private void updatePaymentMethod(String paymentId, PaymentMethod method) {
@@ -451,24 +492,40 @@ public class PaymentService {
             case CARTAO -> "UPDATE public.pagamentos SET metodo = 'Cartão de Crédito' WHERE gateway_payment_id = ?";
             case TRANSFERENCIA -> "UPDATE public.pagamentos SET metodo = 'Boleto' WHERE gateway_payment_id = ?";
         };
-        jdbcTemplate.update(sql, paymentId);
+        requireSingleUpdatedRow(jdbcTemplate.update(sql, paymentId), "atualização do método de pagamento");
     }
 
     private void updatePaymentStatusInDb(String paymentId, PaymentStatus status) {
         String gatewayStatus = status.canonicalName();
         if (status.isApproved()) {
-            jdbcTemplate.update(
+            requireJdbcForFinancialCapture();
+            PaymentAccountingRow accounting = findPaymentAccountingRowForUpdate(paymentId);
+            BigDecimal platformFee = accounting.amount()
+                    .multiply(PLATFORM_FEE_RATE)
+                    .setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+            BigDecimal artistAmount = accounting.amount()
+                    .subtract(platformFee)
+                    .setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+            requireSingleUpdatedRow(jdbcTemplate.update(
                     """
                     UPDATE public.pagamentos
                     SET gateway_status = ?,
-                        status_pagamento = 'Pago'
-                    WHERE gateway_payment_id = ?
+                        status_pagamento = 'Pago',
+                        taxa_percentual = ?,
+                        taxa_plataforma = ?,
+                        valor_artista = ?
+                    WHERE id_pagamento = ? AND gateway_payment_id = ?
                     """,
                     gatewayStatus,
+                    PLATFORM_FEE_RATE,
+                    platformFee,
+                    artistAmount,
+                    accounting.paymentId(),
                     paymentId
-            );
+            ), "atualização do pagamento");
+            ensureRetentionMovement(accounting, artistAmount);
         } else if (status == PaymentStatus.REFUNDED) {
-            jdbcTemplate.update(
+            requireSingleUpdatedRow(jdbcTemplate.update(
                     """
                     UPDATE public.pagamentos
                     SET gateway_status = ?,
@@ -477,9 +534,9 @@ public class PaymentService {
                     """,
                     gatewayStatus,
                     paymentId
-            );
+            ), "atualização do pagamento");
         } else if (status.isDeclined() || status == PaymentStatus.CANCELLED) {
-            jdbcTemplate.update(
+            requireSingleUpdatedRow(jdbcTemplate.update(
                     """
                     UPDATE public.pagamentos
                     SET gateway_status = ?,
@@ -488,9 +545,9 @@ public class PaymentService {
                     """,
                     gatewayStatus,
                     paymentId
-            );
+            ), "atualização do pagamento");
         } else {
-            jdbcTemplate.update(
+            requireSingleUpdatedRow(jdbcTemplate.update(
                     """
                     UPDATE public.pagamentos
                     SET gateway_status = ?,
@@ -499,7 +556,82 @@ public class PaymentService {
                     """,
                     gatewayStatus,
                     paymentId
+            ), "atualização do pagamento");
+        }
+    }
+
+    private void requireJdbcForFinancialCapture() {
+        if (jdbcTemplate instanceof br.com.charte.backend.common.SupabasePostgrestJdbcTemplate supabaseJdbc
+                && !supabaseJdbc.isJdbcConfigured()) {
+            throw new DataAccessResourceFailureException(
+                    "A aprovação financeira exige JDBC transacional; PostgREST não pode registrar retenção com segurança."
             );
+        }
+    }
+
+    private void lockPaymentRow(String paymentId) {
+        findPaymentAccountingRowForUpdate(paymentId);
+    }
+
+    private PaymentAccountingRow findPaymentAccountingRowForUpdate(String paymentId) {
+        try {
+            return jdbcTemplate.queryForObject(
+                    """
+                    SELECT id_pagamento, id_cliente, id_artista, valor
+                    FROM public.pagamentos
+                    WHERE gateway_payment_id = ?
+                    FOR UPDATE
+                    """,
+                    (rs, rowNum) -> new PaymentAccountingRow(
+                            rs.getLong("id_pagamento"),
+                            rs.getLong("id_cliente"),
+                            rs.getLong("id_artista"),
+                            rs.getBigDecimal("valor")
+                    ),
+                    paymentId
+            );
+        } catch (EmptyResultDataAccessException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Pagamento não encontrado");
+        }
+    }
+
+    private void ensureRetentionMovement(PaymentAccountingRow payment, BigDecimal artistAmount) {
+        Integer existing = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM public.movimentacoes_financeiras
+                WHERE id_pagamento = ? AND tipo_movimentacao = 'credito_retido'
+                """,
+                Integer.class,
+                payment.paymentId()
+        );
+        if (existing != null && existing > 0) {
+            return;
+        }
+        if (artistAmount.signum() <= 0) {
+            throw new DataAccessResourceFailureException("O valor retido do artista deve ser positivo.");
+        }
+
+        int inserted = jdbcTemplate.update(
+                """
+                INSERT INTO public.movimentacoes_financeiras
+                    (id_pagamento, id_cliente, id_artista, tipo_movimentacao, valor, descricao)
+                VALUES (?, ?, ?, 'credito_retido', ?, ?)
+                """,
+                payment.paymentId(),
+                payment.clientId(),
+                payment.artistId(),
+                artistAmount,
+                "Valor líquido do artista retido até a confirmação de entrega pelo cliente"
+        );
+        if (inserted != 1) {
+            throw new DataAccessResourceFailureException("O Supabase não confirmou o registro do valor retido.");
+        }
+    }
+
+    private void requireSingleUpdatedRow(int updatedRows, String operation) {
+        if (updatedRows != 1) {
+            throw new DataAccessResourceFailureException("O Supabase não confirmou a " + operation + ".");
         }
     }
 
@@ -507,15 +639,15 @@ public class PaymentService {
         boolean alreadyDelivered = "Entregue".equalsIgnoreCase(currentOrderStatus)
                 || "Finalizada".equalsIgnoreCase(currentOrderStatus);
         if (paymentStatus.isApproved() && !alreadyDelivered) {
-            jdbcTemplate.update(
+            requireSingleUpdatedRow(jdbcTemplate.update(
                     "UPDATE public.pedidos_principal SET status_comissao = 'Em andamento', status_pedido = 'Em Produção' WHERE id_pedido = ?",
                     orderId
-            );
+            ), "atualização do pedido");
         } else if (paymentStatus == PaymentStatus.REFUNDED && !"Cancelada".equalsIgnoreCase(currentOrderStatus)) {
-            jdbcTemplate.update(
+            requireSingleUpdatedRow(jdbcTemplate.update(
                     "UPDATE public.pedidos_principal SET status_comissao = 'Cancelada', status_pedido = 'Cancelado' WHERE id_pedido = ?",
                     orderId
-            );
+            ), "atualização do pedido");
         }
     }
 
@@ -556,7 +688,7 @@ public class PaymentService {
             OrderRow order = findOrderByIdOrThrow(orderId);
             return jdbcTemplate.queryForObject(
                     """
-                    SELECT p.gateway_payment_id, p.id_pedido, CAST(p.metodo AS VARCHAR) AS metodo,
+                    SELECT p.gateway_payment_id, p.id_pedido, p.valor, CAST(p.metodo AS VARCHAR) AS metodo,
                            p.gateway_status, CAST(p.status_pagamento AS VARCHAR) AS status_pagamento,
                            p.checkout_url
                     FROM public.pagamentos p
@@ -579,7 +711,7 @@ public class PaymentService {
         try {
             return jdbcTemplate.queryForObject(
                     """
-                    SELECT p.gateway_payment_id, p.id_pedido, CAST(p.metodo AS VARCHAR) AS metodo,
+                    SELECT p.gateway_payment_id, p.id_pedido, p.valor, CAST(p.metodo AS VARCHAR) AS metodo,
                            p.gateway_status, CAST(p.status_pagamento AS VARCHAR) AS status_pagamento,
                            p.checkout_url,
                            COALESCE(ped.proposta_valor, ped.valor_total) AS pedido_valor
@@ -602,7 +734,10 @@ public class PaymentService {
         String gatewayStatus = rs.getString("gateway_status");
         String dbStatus = rs.getString("status_pagamento");
         String checkoutUrl = rs.getString("checkout_url");
-        BigDecimal effectiveAmount = fallbackAmount != null ? fallbackAmount : BigDecimal.ZERO;
+        BigDecimal persistedAmount = rs.getBigDecimal("valor");
+        BigDecimal effectiveAmount = persistedAmount != null
+                ? persistedAmount
+                : (fallbackAmount != null ? fallbackAmount : BigDecimal.ZERO);
         String paymentDate = LocalDate.now().toString();
 
         String normalizedStatus = normalizeGatewayStatus(gatewayStatus, dbStatus);
@@ -762,8 +897,7 @@ public class PaymentService {
     private OrderRow findOrderForParticipantOrThrow(Long orderId, Long userId) {
         OrderRow row = findOrderByIdOrThrow(orderId);
         boolean isClient = row.idCliente() != null && row.idCliente().equals(userId);
-        boolean isArtist = (row.idUsuarioArtista() != null && row.idUsuarioArtista().equals(userId))
-                || (row.idArtista() != null && row.idArtista().equals(userId));
+        boolean isArtist = row.idUsuarioArtista() != null && row.idUsuarioArtista().equals(userId);
         if (!isClient && !isArtist) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não possui permissão para visualizar este pedido");
         }

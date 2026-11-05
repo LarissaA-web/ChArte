@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -43,9 +44,10 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 /**
  * Implementação resiliente de {@link JdbcTemplate} que delega ao PostgreSQL via JDBC quando
- * {@code SUPABASE_JDBC_URL} está configurado com credenciais reais e, caso contrário,
+ * o modo JDBC está selecionado e configurado e, caso contrário,
  * executa as consultas diretamente na API PostgREST do Supabase ({@code /rest/v1/*})
- * utilizando a chave pública do projeto e o token JWT Bearer do usuário autenticado.
+ * utilizando a chave pública do projeto e o token JWT Bearer do usuário autenticado. Falhas
+ * de conexão JDBC são propagadas e nunca alternam silenciosamente para PostgREST.
  */
 public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
 
@@ -56,9 +58,7 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
     private final ObjectMapper objectMapper;
 
     // Cache local de fallback caso alguma tabela no Supabase restrinja escrita via RLS
-    private final List<Map<String, Object>> localPayments = new CopyOnWriteArrayList<>();
     private final List<Map<String, Object>> localFollows = new CopyOnWriteArrayList<>();
-    private final Map<Long, Map<String, String>> localOrderStatuses = new ConcurrentHashMap<>();
     private final AtomicLong localIdGenerator = new AtomicLong(10000L);
 
     public SupabasePostgrestJdbcTemplate(
@@ -87,8 +87,8 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
         if (jdbcConfigured) {
             try {
                 return super.query(sql, rowMapper, args);
-            } catch (CannotGetJdbcConnectionException ignored) {
-                // Fallback automático para PostgREST
+            } catch (CannotGetJdbcConnectionException ex) {
+                throw jdbcUnavailable("consulta", ex);
             }
         }
         List<Map<String, Object>> rows = executeSelect(normalizeSql(sql), args);
@@ -117,8 +117,8 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
         if (jdbcConfigured) {
             try {
                 return super.queryForObject(sql, requiredType, args);
-            } catch (CannotGetJdbcConnectionException ignored) {
-                // Fallback automático para PostgREST
+            } catch (CannotGetJdbcConnectionException ex) {
+                throw jdbcUnavailable("consulta escalar", ex);
             }
         }
         String norm = normalizeSql(sql);
@@ -143,8 +143,8 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
         if (jdbcConfigured) {
             try {
                 return super.update(sql, args);
-            } catch (CannotGetJdbcConnectionException ignored) {
-                // Fallback automático para PostgREST
+            } catch (CannotGetJdbcConnectionException ex) {
+                throw jdbcUnavailable("gravação", ex);
             }
         }
         return executeUpdate(normalizeSql(sql), args);
@@ -155,13 +155,21 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
         if (jdbcConfigured) {
             try {
                 return super.update(psc, generatedKeyHolder);
-            } catch (CannotGetJdbcConnectionException ignored) {
-                // Fallback automático para PostgREST
+            } catch (CannotGetJdbcConnectionException ex) {
+                throw jdbcUnavailable("gravação", ex);
             }
         }
         long id = localIdGenerator.incrementAndGet();
         generatedKeyHolder.getKeyList().add(Map.of("id_conversa", id, "id_mensagem", id));
         return 1;
+    }
+
+    private DataAccessResourceFailureException jdbcUnavailable(String operation, Throwable cause) {
+        return new DataAccessResourceFailureException(
+                "Modo JDBC está ativo, mas a conexão PostgreSQL falhou durante " + operation
+                        + "; a operação não foi redirecionada ao PostgREST.",
+                cause
+        );
     }
 
     private Object executeScalar(String norm, Object[] args) {
@@ -425,34 +433,30 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
         // 3. Inserir pagamento simulado
         if (norm.startsWith("INSERT INTO PUBLIC.PAGAMENTOS")) {
             Long orderId = toLong(args[0]);
+            Long clientId = toLong(args[1]);
+            Long artistId = toLong(args[2]);
+            BigDecimal amount = toBigDecimal(args[3]);
             String method = norm.contains("'CARTÃO DE CRÉDITO'")
                     ? "Cartão de Crédito"
-                    : (norm.contains("'BOLETO'") ? "Transferência bancária" : "Pix");
-            String paymentId = String.valueOf(args[1]);
-            String checkoutUrl = String.valueOf(args[2]);
-            String gatewayStatus = String.valueOf(args[3]);
+                    : (norm.contains("'BOLETO'") ? "Boleto" : "Pix");
+            String paymentId = String.valueOf(args[4]);
+            String checkoutUrl = String.valueOf(args[5]);
+            String gatewayStatus = String.valueOf(args[6]);
 
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("id_pedido", orderId);
+            payload.put("id_cliente", clientId);
+            payload.put("id_artista", artistId);
+            payload.put("valor", amount);
             payload.put("metodo", method);
             payload.put("status_pagamento", "Pendente");
             payload.put("gateway_payment_id", paymentId);
             payload.put("checkout_url", checkoutUrl);
             payload.put("gateway_status", gatewayStatus);
 
-            boolean savedRemote = restPost("pagamentos", payload);
-            if (!savedRemote && "Transferência bancária".equals(method)) {
-                payload.put("metodo", "Boleto");
-                savedRemote = restPost("pagamentos", payload);
-                if (!savedRemote) {
-                    payload.put("metodo", "Pix");
-                    restPost("pagamentos", payload);
-                }
+            if (!restPost("pagamentos", payload)) {
+                throw new DataAccessResourceFailureException("O Supabase rejeitou a gravação do pagamento.");
             }
-            Map<String, Object> localCopy = new HashMap<>(payload);
-            localCopy.put("id_pagamento", localIdGenerator.incrementAndGet());
-            localPayments.removeIf(p -> Objects.equals(asString(p.get("gateway_payment_id")), paymentId));
-            localPayments.add(0, localCopy);
             return 1;
         }
 
@@ -460,15 +464,11 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
         if (norm.startsWith("UPDATE PUBLIC.PAGAMENTOS SET METODO =")) {
             String method = norm.contains("'CARTÃO DE CRÉDITO'")
                     ? "Cartão de Crédito"
-                    : (norm.contains("'BOLETO'") ? "Transferência bancária" : "Pix");
+                    : (norm.contains("'BOLETO'") ? "Boleto" : "Pix");
             String paymentId = String.valueOf(args[0]);
-            boolean patched = restPatch("pagamentos", "gateway_payment_id=eq." + encode(paymentId), Map.of("metodo", method));
-            if (!patched && "Transferência bancária".equals(method)) {
-                restPatch("pagamentos", "gateway_payment_id=eq." + encode(paymentId), Map.of("metodo", "Boleto"));
+            if (!restPatch("pagamentos", "gateway_payment_id=eq." + encode(paymentId), Map.of("metodo", method))) {
+                throw new DataAccessResourceFailureException("O Supabase não confirmou a atualização do método de pagamento.");
             }
-            localPayments.stream()
-                    .filter(p -> Objects.equals(asString(p.get("gateway_payment_id")), paymentId))
-                    .forEach(p -> p.put("metodo", method));
             return 1;
         }
 
@@ -485,30 +485,11 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
                 dbStatus = "Cancelado";
             }
 
-            Map<String, Object> existing = findPaymentByGatewayId(paymentId);
-
             Map<String, Object> patch = new LinkedHashMap<>();
             patch.put("gateway_status", gatewayStatus);
             patch.put("status_pagamento", dbStatus);
-            boolean patched = restPatch("pagamentos", "gateway_payment_id=eq." + encode(paymentId), patch);
-            if (!patched) {
-                restPatch("pagamentos", "gateway_payment_id=eq." + encode(paymentId), Map.of("gateway_status", gatewayStatus));
-            }
-
-            final String finalDbStatus = dbStatus;
-            boolean updatedInLocal = false;
-            for (Map<String, Object> p : localPayments) {
-                if (Objects.equals(asString(p.get("gateway_payment_id")), paymentId)) {
-                    p.put("gateway_status", gatewayStatus);
-                    p.put("status_pagamento", finalDbStatus);
-                    updatedInLocal = true;
-                }
-            }
-            if (!updatedInLocal && existing != null) {
-                Map<String, Object> localCopy = new HashMap<>(existing);
-                localCopy.put("gateway_status", gatewayStatus);
-                localCopy.put("status_pagamento", finalDbStatus);
-                localPayments.add(0, localCopy);
+            if (!restPatch("pagamentos", "gateway_payment_id=eq." + encode(paymentId), patch)) {
+                throw new DataAccessResourceFailureException("O Supabase não confirmou a atualização do pagamento.");
             }
             return 1;
         }
@@ -520,21 +501,13 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
             if (norm.contains("STATUS_COMISSAO = 'EM ANDAMENTO'")) {
                 patch.put("status_comissao", "Em andamento");
                 patch.put("status_pedido", "Em Produção");
-                if (orderId != null) {
-                    localOrderStatuses.put(orderId, Map.of("status_comissao", "Em andamento", "status_pedido", "Em Produção"));
-                }
             } else if (norm.contains("STATUS_COMISSAO = 'CANCELADA'")) {
                 patch.put("status_comissao", "Cancelada");
                 patch.put("status_pedido", "Cancelado");
-                if (orderId != null) {
-                    localOrderStatuses.put(orderId, Map.of("status_comissao", "Cancelada", "status_pedido", "Cancelado"));
-                }
             }
             if (!patch.isEmpty()) {
-                boolean patched = restPatch("pedidos_principal", "id_pedido=eq." + orderId, patch);
-                if (!patched && patch.containsKey("status_comissao")) {
-                    restPatch("pedidos_principal", "id_pedido=eq." + orderId, Map.of("status_comissao", patch.get("status_comissao")));
-                    restPatch("pedidos_principal", "id_pedido=eq." + orderId, Map.of("status_pedido", patch.get("status_pedido")));
+                if (!restPatch("pedidos_principal", "id_pedido=eq." + orderId, patch)) {
+                    throw new DataAccessResourceFailureException("O Supabase não confirmou a atualização do pedido.");
                 }
             }
             return 1;
@@ -591,10 +564,6 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
         if (ped.get("status_comissao") == null) {
             ped.put("status_comissao", ped.getOrDefault("status_pedido", "Pendente"));
         }
-        Map<String, String> localStatus = localOrderStatuses.get(orderId);
-        if (localStatus != null) {
-            ped.putAll(localStatus);
-        }
 
         if (idCliente != null) {
             List<Map<String, Object>> clients = restGet("usuario", "select=nome,nome_usuario&id_usuario=eq." + idCliente + "&limit=1");
@@ -615,163 +584,39 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
     }
 
     private List<Map<String, Object>> getPaymentsForOrder(Long orderId) {
-        List<Map<String, Object>> remote = restGet("pagamentos", "select=*&id_pedido=eq." + orderId + "&order=id_pagamento.desc");
-        Map<String, Map<String, Object>> localByGw = new LinkedHashMap<>();
-        for (Map<String, Object> local : localPayments) {
-            if (Objects.equals(toLong(local.get("id_pedido")), orderId)) {
-                String gwId = asString(local.get("gateway_payment_id"));
-                if (gwId != null) {
-                    localByGw.put(gwId, new HashMap<>(local));
-                }
-            }
-        }
-        List<Map<String, Object>> combined = new ArrayList<>();
-        Set<String> seenIds = ConcurrentHashMap.newKeySet();
-        for (Map<String, Object> r : remote) {
-            String gwId = asString(r.get("gateway_payment_id"));
-            if (gwId != null && localByGw.containsKey(gwId)) {
-                Map<String, Object> merged = new HashMap<>(r);
-                merged.putAll(localByGw.get(gwId));
-                combined.add(merged);
-                seenIds.add(gwId);
-            } else {
-                combined.add(r);
-                if (gwId != null) seenIds.add(gwId);
-            }
-        }
-        for (Map.Entry<String, Map<String, Object>> entry : localByGw.entrySet()) {
-            if (!seenIds.contains(entry.getKey())) {
-                combined.add(0, entry.getValue());
-            }
-        }
-        return combined;
+        return restGet("pagamentos", "select=*&id_pedido=eq." + orderId + "&order=id_pagamento.desc");
     }
 
     private Map<String, Object> findPaymentByGatewayId(String paymentId) {
-        Map<String, Object> localMatch = localPayments.stream()
-                .filter(p -> Objects.equals(asString(p.get("gateway_payment_id")), paymentId))
-                .findFirst()
-                .orElse(null);
         List<Map<String, Object>> remote = restGet("pagamentos", "select=*&gateway_payment_id=eq." + encode(paymentId) + "&limit=1");
-        if (!remote.isEmpty()) {
-            Map<String, Object> merged = new HashMap<>(remote.get(0));
-            if (localMatch != null) {
-                merged.putAll(localMatch);
-            }
-            return merged;
-        }
-        return localMatch;
+        return remote.isEmpty() ? null : remote.get(0);
     }
 
     private List<Map<String, Object>> buildEnrichedPaymentsForOrders(List<Map<String, Object>> orders) {
-        if (orders == null || orders.isEmpty()) {
-            return List.of();
-        }
+        if (orders == null || orders.isEmpty()) return List.of();
         Map<Long, Map<String, Object>> orderMap = new LinkedHashMap<>();
-        for (Map<String, Object> o : orders) {
-            Long id = toLong(o.get("id_pedido"));
-            if (id != null) {
-                Map<String, Object> copy = new HashMap<>(o);
-                Map<String, String> localSt = localOrderStatuses.get(id);
-                if (localSt != null) {
-                    copy.putAll(localSt);
-                }
-                orderMap.put(id, copy);
-            }
+        for (Map<String, Object> order : orders) {
+            Long id = toLong(order.get("id_pedido"));
+            if (id != null) orderMap.put(id, order);
         }
-        if (orderMap.isEmpty()) {
-            return List.of();
-        }
-        String joinedOrderIds = orderMap.keySet().stream().map(String::valueOf).collect(Collectors.joining(","));
-        List<Map<String, Object>> remotePayments = restGet("pagamentos", "select=*&id_pedido=in.(" + joinedOrderIds + ")&order=id_pagamento.desc");
-        Map<String, Map<String, Object>> localByGw = new LinkedHashMap<>();
-        for (Map<String, Object> local : localPayments) {
-            Long oid = toLong(local.get("id_pedido"));
-            String gwId = asString(local.get("gateway_payment_id"));
-            if (oid != null && orderMap.containsKey(oid) && gwId != null) {
-                localByGw.put(gwId, new HashMap<>(local));
-            }
-        }
+        if (orderMap.isEmpty()) return List.of();
 
-        List<Map<String, Object>> payments = new ArrayList<>();
-        Set<String> seenIds = ConcurrentHashMap.newKeySet();
-        for (Map<String, Object> r : remotePayments) {
-            String gwId = asString(r.get("gateway_payment_id"));
-            if (gwId != null && localByGw.containsKey(gwId)) {
-                Map<String, Object> merged = new HashMap<>(r);
-                merged.putAll(localByGw.get(gwId));
-                payments.add(merged);
-                seenIds.add(gwId);
-            } else {
-                payments.add(r);
-                if (gwId != null) seenIds.add(gwId);
-            }
-        }
-        for (Map.Entry<String, Map<String, Object>> entry : localByGw.entrySet()) {
-            if (!seenIds.contains(entry.getKey())) {
-                payments.add(0, entry.getValue());
-            }
-        }
-
-        Set<Long> ordersWithPayment = ConcurrentHashMap.newKeySet();
+        String joinedIds = orderMap.keySet().stream().map(String::valueOf).collect(Collectors.joining(","));
+        List<Map<String, Object>> payments = restGet(
+                "pagamentos", "select=*&id_pedido=in.(" + joinedIds + ")&order=id_pagamento.desc");
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Map<String, Object> p : payments) {
-            String gwId = asString(p.get("gateway_payment_id"));
-            if (gwId == null || gwId.isBlank()) {
-                continue;
-            }
-            Long oid = toLong(p.get("id_pedido"));
-            Map<String, Object> ord = orderMap.get(oid);
-            if (ord == null) {
-                continue;
-            }
-            ordersWithPayment.add(oid);
-            Map<String, Object> row = new HashMap<>(p);
-            BigDecimal val = toBigDecimal(ord.get("proposta_valor"));
-            if (val == null || val.compareTo(BigDecimal.ZERO) <= 0) {
-                val = toBigDecimal(ord.get("valor_total"));
-            }
-            row.put("pedido_valor", val != null ? val : BigDecimal.ZERO);
-            row.put("pedido_status", ord.getOrDefault("status_comissao", ord.getOrDefault("status_pedido", "Pendente")));
-            row.put("pedido_titulo", ord.getOrDefault("titulo", "Pedido #" + oid));
+        for (Map<String, Object> payment : payments) {
+            Long orderId = toLong(payment.get("id_pedido"));
+            Map<String, Object> order = orderMap.get(orderId);
+            String paymentId = asString(payment.get("gateway_payment_id"));
+            if (order == null || paymentId == null || paymentId.isBlank()) continue;
+            Map<String, Object> row = new HashMap<>(payment);
+            row.put("pedido_valor", payment.get("valor"));
+            row.put("pedido_status", order.getOrDefault("status_comissao", order.getOrDefault("status_pedido", "Pendente")));
+            row.put("pedido_titulo", order.getOrDefault("titulo", "Pedido #" + orderId));
             row.put("nome_cliente", null);
             row.put("nome_artista", null);
             result.add(row);
-        }
-
-        for (Map.Entry<Long, Map<String, Object>> entry : orderMap.entrySet()) {
-            Long oid = entry.getKey();
-            if (ordersWithPayment.contains(oid)) {
-                continue;
-            }
-            Map<String, Object> ord = entry.getValue();
-            String stComissao = asString(ord.get("status_comissao"));
-            String stPedido = asString(ord.get("status_pedido"));
-            boolean paidByOrderState = "Em andamento".equalsIgnoreCase(stComissao)
-                    || "Entregue".equalsIgnoreCase(stComissao)
-                    || "Finalizada".equalsIgnoreCase(stComissao)
-                    || "Em Produção".equalsIgnoreCase(stPedido)
-                    || "Entregue para Avaliação do Cliente".equalsIgnoreCase(stPedido)
-                    || "Entregue".equalsIgnoreCase(stPedido);
-            if (paidByOrderState) {
-                Map<String, Object> synth = new HashMap<>();
-                synth.put("gateway_payment_id", "pay_ped_" + oid);
-                synth.put("id_pedido", oid);
-                synth.put("metodo", "Pix");
-                synth.put("gateway_status", "APPROVED");
-                synth.put("status_pagamento", "Pago");
-                synth.put("checkout_url", "/pedido/" + oid + "?paymentId=pay_ped_" + oid);
-                BigDecimal val = toBigDecimal(ord.get("proposta_valor"));
-                if (val == null || val.compareTo(BigDecimal.ZERO) <= 0) {
-                    val = toBigDecimal(ord.get("valor_total"));
-                }
-                synth.put("pedido_valor", val != null ? val : BigDecimal.ZERO);
-                synth.put("pedido_status", stComissao != null ? stComissao : stPedido);
-                synth.put("pedido_titulo", ord.getOrDefault("titulo", "Pedido #" + oid));
-                synth.put("nome_cliente", null);
-                synth.put("nome_artista", null);
-                result.add(synth);
-            }
         }
         return result;
     }
@@ -838,11 +683,16 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
             String json = objectMapper.writeValueAsString(payload);
             HttpRequest request = baseRequest(uri)
                     .header("Content-Type", "application/json")
-                    .header("Prefer", "return=minimal")
+                    .header("Prefer", "return=representation")
                     .method("PATCH", HttpRequest.BodyPublishers.ofString(json))
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            return response.statusCode() >= 200 && response.statusCode() < 300;
+            if (response.statusCode() < 200 || response.statusCode() >= 300 || response.body().isBlank()) {
+                return false;
+            }
+            List<Map<String, Object>> rows = objectMapper.readValue(
+                    response.body(), new TypeReference<List<Map<String, Object>>>() {});
+            return !rows.isEmpty();
         } catch (Exception ignored) {
             return false;
         }
@@ -865,6 +715,11 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
     }
 
     private HttpRequest.Builder baseRequest(String uri) {
+        if (supabaseUrl.isBlank() || supabaseAnonKey.isBlank()) {
+            throw new DataAccessResourceFailureException(
+                    "Modo PostgREST requer SUPABASE_URL e SUPABASE_ANON_KEY configurados no backend."
+            );
+        }
         String bearer = resolveCurrentBearerToken();
         return HttpRequest.newBuilder()
                 .uri(URI.create(uri))
