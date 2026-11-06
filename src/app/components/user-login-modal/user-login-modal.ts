@@ -37,15 +37,28 @@ export class UserLoginModal {
     this.carregando = true;
     this.mensagemErro = '';
     try {
-      const sucesso = await this.authService.login(identificador, this.senha, 'Comum');
-      if (sucesso) {
+      const resultado = await this.authService.login(identificador, this.senha, 'Comum');
+      if (resultado.status === 'success') {
         this.modal.closeModal();
         void this.router.navigate(['/']);
       } else {
-        this.mensagemErro = 'Usuário, e-mail ou senha incorretos.';
+        this.mensagemErro = this.mensagemParaResultado(resultado.status);
       }
     } finally {
       this.carregando = false;
+    }
+  }
+
+  private mensagemParaResultado(status: string): string {
+    switch (status) {
+      case 'email_not_confirmed': return 'Confirme seu e-mail antes de entrar.';
+      case 'account_not_found': return 'E-mail ou usuário não encontrado.';
+      case 'account_disabled': return 'Esta conta foi desativada.';
+      case 'age_restricted': return 'O acesso ao ChArte exige idade mínima de 16 anos.';
+      case 'account_type_mismatch': return 'Esta conta é de artista. Entre pelo login de artista.';
+      case 'connection_error': return 'Falha de conexão. Verifique sua internet e tente novamente.';
+      case 'service_error': return 'Não foi possível validar sua conta agora. Tente novamente.';
+      default: return 'E-mail, usuário ou senha incorretos.';
     }
   }
 

@@ -10,8 +10,8 @@ import { PerfilService } from '../../../../services/perfil.service';
 import { ModalService } from '../../../../services/modal.service';
 import { PinService } from '../../../../services/pinService';
 import { PaymentService, PaymentView } from '../../../../services/payment.service';
+import { ArtistFinanceMovement, ArtistFinanceService, ArtistFinanceSummary } from '../../../../services/artist-finance.service';
 import {
-  ArquivoEntregaComissao,
   AvaliacaoArtista,
   CalculoRepasseArtista,
   Comissao,
@@ -57,9 +57,9 @@ export class ArtistArea implements OnInit, OnDestroy {
   erroEdicaoArte = '';
   menuAberto = false;
   arquivoSelecionado: File | null = null;
-  arquivosEntregaSelecionados: ArquivoEntregaComissao[] = [];
   previewEntrega = '';
   erroEntrega = '';
+  sucessoEntrega = false;
   enviandoEntrega = false;
   entregaAtual: Comissao | null = null;
   comissaoSelecionada: Comissao | null = null;
@@ -85,6 +85,14 @@ export class ArtistArea implements OnInit, OnDestroy {
 
   vendasArtista: PaymentView[] = [];
   carregandoVendas = false;
+  resumoFinanceiro: ArtistFinanceSummary | null = null;
+  movimentacoesFinanceiras: ArtistFinanceMovement[] = [];
+  totalMovimentacoesFinanceiras = 0;
+  paginaMovimentacoesFinanceiras = 0;
+  carregandoFinanceiro = false;
+  carregandoMovimentacoes = false;
+  erroFinanceiro = '';
+  erroMovimentacoes = '';
   private subscriptions = new Subscription();
 
   constructor(
@@ -95,10 +103,12 @@ export class ArtistArea implements OnInit, OnDestroy {
     private router: Router,
     private modal: ModalService,
     private paymentService: PaymentService,
+    private artistFinance: ArtistFinanceService,
     private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit(): void {
+    void this.carregarDashboardFinanceiro();
     this.subscriptions.add(
       this.artistData.comissoes$.subscribe(() => {
         if (this.comissaoSelecionada) {
@@ -117,6 +127,7 @@ export class ArtistArea implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
+    this.limparPreviewEntrega();
   }
 
   get receitaTotalAprovada(): number {
@@ -227,13 +238,6 @@ export class ArtistArea implements OnInit, OnDestroy {
   }
   excluirDiretriz(diretriz: DiretrizComissao): void { if (window.confirm(`Excluir a diretriz “${diretriz.titulo}”?`)) this.artistData.excluirDiretriz(diretriz.id, this.perfil.nomeUsuario); }
 
-  selecionarSecao(secao: SecaoArtista): void {
-    this.secaoAtual = secao;
-    this.menuAberto = false;
-    if (secao === 'privacidade' || secao === 'opcoes-comissao') this.privacidade = this.artistData.obterPrivacidade(this.perfil.nomeUsuario);
-    if (secao === 'vendas') void this.carregarVendasArtista();
-  }
-
   private async carregarVendasArtista(): Promise<void> {
     this.carregandoVendas = true;
     this.cdr.detectChanges();
@@ -245,6 +249,65 @@ export class ArtistArea implements OnInit, OnDestroy {
       this.carregandoVendas = false;
       this.cdr.detectChanges();
     }
+  }
+
+  async carregarDashboardFinanceiro(): Promise<void> {
+    this.carregandoFinanceiro = true;
+    this.carregandoMovimentacoes = true;
+    this.erroFinanceiro = '';
+    this.erroMovimentacoes = '';
+    this.cdr.detectChanges();
+
+    const [resumo, movimentos] = await Promise.allSettled([
+      this.artistFinance.getSummary(),
+      this.artistFinance.getMovements(this.paginaMovimentacoesFinanceiras),
+    ]);
+
+    if (resumo.status === 'fulfilled') {
+      this.resumoFinanceiro = resumo.value;
+    } else {
+      this.resumoFinanceiro = null;
+      this.erroFinanceiro = 'Não foi possível carregar os dados financeiros. Tente novamente.';
+    }
+    this.carregandoFinanceiro = false;
+
+    if (movimentos.status === 'fulfilled') {
+      this.movimentacoesFinanceiras = movimentos.value.items;
+      this.totalMovimentacoesFinanceiras = movimentos.value.total;
+    } else {
+      this.movimentacoesFinanceiras = [];
+      this.totalMovimentacoesFinanceiras = 0;
+      this.erroMovimentacoes = 'Não foi possível carregar o histórico de movimentações. Tente novamente.';
+    }
+    this.carregandoMovimentacoes = false;
+    this.cdr.detectChanges();
+  }
+
+  async mudarPaginaMovimentacoes(page: number): Promise<void> {
+    if (page < 0 || page * 20 >= this.totalMovimentacoesFinanceiras) return;
+    this.paginaMovimentacoesFinanceiras = page;
+    this.carregandoMovimentacoes = true;
+    this.erroMovimentacoes = '';
+    this.cdr.detectChanges();
+    try {
+      const result = await this.artistFinance.getMovements(page);
+      this.movimentacoesFinanceiras = result.items;
+      this.totalMovimentacoesFinanceiras = result.total;
+    } catch {
+      this.movimentacoesFinanceiras = [];
+      this.erroMovimentacoes = 'Não foi possível carregar o histórico de movimentações. Tente novamente.';
+    } finally {
+      this.carregandoMovimentacoes = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  selecionarSecao(secao: SecaoArtista): void {
+    this.secaoAtual = secao;
+    this.menuAberto = false;
+    if (secao === 'privacidade' || secao === 'opcoes-comissao') this.privacidade = this.artistData.obterPrivacidade(this.perfil.nomeUsuario);
+    if (secao === 'vendas') void this.carregarVendasArtista();
+    if (secao === 'dashboard') void this.carregarDashboardFinanceiro();
   }
 
   async aceitar(comissao: Comissao): Promise<void> {
@@ -299,15 +362,14 @@ export class ArtistArea implements OnInit, OnDestroy {
     void this.artistData.atualizarStatus(comissao.id, 'Finalizada').then(() => this.cdr.detectChanges());
   }
 
-  abrirEntrega(comissao: Comissao, abrirSeletorArquivos = true): void {
+  abrirEntrega(comissao: Comissao, abrirSeletorArquivos = false): void {
+    this.limparPreviewEntrega();
     this.entregaAtual = comissao;
     this.arquivoSelecionado = null;
-    this.arquivosEntregaSelecionados = comissao.arquivosEntrega
-      ? comissao.arquivosEntrega.map((a) => ({ ...a }))
-      : [];
-    this.previewEntrega = comissao.arquivoEntrega || '';
-    this.observacaoEntrega = comissao.observacaoEntrega || '';
+    this.previewEntrega = '';
+    this.observacaoEntrega = '';
     this.erroEntrega = '';
+    this.sucessoEntrega = false;
     this.cdr.detectChanges();
 
     if (abrirSeletorArquivos) {
@@ -329,76 +391,69 @@ export class ArtistArea implements OnInit, OnDestroy {
     }
   }
 
-  removerArquivoEntrega(indice: number): void {
-    this.arquivosEntregaSelecionados = this.arquivosEntregaSelecionados.filter((_, i) => i !== indice);
-    if (this.arquivosEntregaSelecionados.length === 0) {
-      this.arquivoSelecionado = null;
-      this.previewEntrega = '';
-    } else {
-      this.previewEntrega = this.arquivosEntregaSelecionados[0].url;
-    }
+  cancelarEntrega(): void {
+    if (this.enviandoEntrega) return;
+    this.entregaAtual = null;
+    this.arquivoSelecionado = null;
+    this.observacaoEntrega = '';
+    this.erroEntrega = '';
+    this.sucessoEntrega = false;
+    this.limparPreviewEntrega();
     this.cdr.detectChanges();
   }
 
-  selecionarArquivo(event: Event): void {
-    const files = Array.from((event.target as HTMLInputElement).files ?? []);
-    if (!files.length) return;
+  private limparPreviewEntrega(): void {
+    if (this.previewEntrega.startsWith('blob:')) URL.revokeObjectURL(this.previewEntrega);
+    this.previewEntrega = '';
+  }
 
-    const acimaDoLimite = files.find((f) => f.size > 10 * 1024 * 1024);
-    if (acimaDoLimite) {
-      this.erroEntrega = `O arquivo "${acimaDoLimite.name}" excede 10 MB. Escolha arquivos menores.`;
+  selecionarArquivo(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const arquivo = input.files?.[0];
+    if (!arquivo) return;
+    const formatosPermitidos = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!formatosPermitidos.includes(arquivo.type.toLowerCase())) {
+      this.erroEntrega = 'Selecione uma imagem PNG, JPG ou WEBP.';
+      input.value = '';
+      this.cdr.detectChanges();
+      return;
+    }
+    if (arquivo.size <= 0 || arquivo.size > 10 * 1024 * 1024) {
+      this.erroEntrega = 'A imagem deve ter até 10 MB e não pode estar vazia.';
+      input.value = '';
       this.cdr.detectChanges();
       return;
     }
 
-    this.arquivoSelecionado = files[0];
+    this.limparPreviewEntrega();
+    this.arquivoSelecionado = arquivo;
+    this.previewEntrega = URL.createObjectURL(arquivo);
     this.erroEntrega = '';
-
-    files.forEach((file, index) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = typeof reader.result === 'string' ? reader.result : '';
-        if (!dataUrl) return;
-        const novoItem: ArquivoEntregaComissao = {
-          nome: file.name,
-          url: dataUrl,
-          tipo: file.type || 'application/octet-stream',
-        };
-        this.arquivosEntregaSelecionados = [...this.arquivosEntregaSelecionados, novoItem];
-        if (!this.previewEntrega || index === 0) {
-          this.previewEntrega = dataUrl;
-        }
-        this.cdr.detectChanges();
-      };
-      reader.onerror = () => {
-        this.erroEntrega = `Não foi possível ler o arquivo "${file.name}".`;
-        this.cdr.detectChanges();
-      };
-      reader.readAsDataURL(file);
-    });
+    this.cdr.detectChanges();
   }
 
   async enviarEntrega(): Promise<void> {
-    if (!this.entregaAtual || (!this.previewEntrega && !this.arquivosEntregaSelecionados.length) || this.enviandoEntrega) return;
+    if (this.enviandoEntrega || this.sucessoEntrega || !this.entregaAtual) return;
+    if (!this.arquivoSelecionado) {
+      this.erroEntrega = 'Selecione a imagem final da comissão antes de confirmar.';
+      return;
+    }
+    const pedidoId = this.entregaAtual.id;
+    const arquivo = this.arquivoSelecionado;
     this.enviandoEntrega = true;
     this.erroEntrega = '';
     this.cdr.detectChanges();
     try {
-      const urlPrincipal = this.previewEntrega || this.arquivosEntregaSelecionados[0]?.url || '';
       await this.artistData.registrarEntrega(
-        this.entregaAtual.id,
-        urlPrincipal,
+        pedidoId,
+        arquivo,
         this.observacaoEntrega.trim(),
-        this.arquivoSelecionado ?? undefined,
-        this.arquivosEntregaSelecionados,
       );
-      this.entregaAtual = null;
-      this.arquivoSelecionado = null;
-      this.arquivosEntregaSelecionados = [];
-      this.previewEntrega = '';
-      this.observacaoEntrega = '';
-    } catch {
-      this.erroEntrega = 'Não foi possível enviar a comissão. Tente novamente.';
+      this.sucessoEntrega = true;
+    } catch (error) {
+      this.erroEntrega = error instanceof Error
+        ? error.message
+        : 'Não foi possível enviar a comissão. Verifique a conexão e tente novamente.';
     } finally {
       this.enviandoEntrega = false;
       this.cdr.detectChanges();

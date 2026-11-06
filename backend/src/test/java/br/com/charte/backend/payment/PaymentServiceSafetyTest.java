@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.charte.backend.testsupport.InMemoryCharteJdbcTemplate;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
@@ -43,6 +45,79 @@ class PaymentServiceSafetyTest {
         assertEquals("PENDING", second.status());
         assertNotNull(second.pixCode());
         assertEquals(1, jdbcTemplate.countPayments());
+        assertEquals(1L, jdbcTemplate.latestPayment().idCliente);
+        assertEquals(2L, jdbcTemplate.latestPayment().idArtista);
+        assertEquals(new BigDecimal("150.00"), jdbcTemplate.latestPayment().valor);
+        assertEquals(new BigDecimal("150.00"), first.amount());
+    }
+
+    @Test
+    void resolveUuidAuthParaIdUsuarioEAutorizaSomenteClienteDoPedido() {
+        String authId = "f33df301-8ec7-44ab-b85c-e643251edb73";
+        jdbcTemplate.addUser(8L, authId, "Morgana84", "Morgana", false);
+        jdbcTemplate.addUser(9L, "auth_artist_9", "artista9", "Artista Nove", true);
+        jdbcTemplate.addOrder(33L, 8L, 9L, new BigDecimal("150.00"), "Pendente", "Arte de teste local");
+
+        PaymentService.PaymentView checkout = service.checkout(
+                new PaymentService.CheckoutRequest(33L, "PIX"), authId);
+
+        assertEquals(33L, checkout.orderId());
+        assertEquals(8L, jdbcTemplate.latestPayment().idCliente);
+        assertEquals(1, service.listCustomerPayments(authId).size());
+    }
+
+    @Test
+    void bloqueiaNoBackendContaComMenosDeDezesseisAnos() {
+        String authId = "auth_underage";
+        jdbcTemplate.addUser(8L, authId, "menor", "Conta menor", false);
+        jdbcTemplate.setBirthDate(8L, LocalDate.now().minusYears(15));
+        jdbcTemplate.addUser(9L, "auth_artist_9", "artista9", "Artista Nove", true);
+        jdbcTemplate.addOrder(33L, 8L, 9L, new BigDecimal("150.00"), "Pendente", "Pedido local");
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.checkout(new PaymentService.CheckoutRequest(33L, "PIX"), authId));
+
+        assertEquals(403, error.getStatusCode().value());
+        assertEquals(0, jdbcTemplate.countPayments());
+    }
+
+    @Test
+    void naoDeveRetornarSucessoQuandoInsercaoDoPagamentoFalha() {
+        jdbcTemplate.failPaymentInsert(true);
+
+        assertThrows(
+                org.springframework.dao.DataAccessResourceFailureException.class,
+                () -> service.checkout(new PaymentService.CheckoutRequest(100L, "PIX"), "auth_u1")
+        );
+        assertEquals(0, jdbcTemplate.countPayments());
+    }
+
+    @Test
+    void checkoutConcorrenteDoMesmoPedidoReaproveitaUmaUnicaLinha() throws Exception {
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> service.checkout(
+                    new PaymentService.CheckoutRequest(100L, "PIX"), "auth_u1"));
+            var second = executor.submit(() -> service.checkout(
+                    new PaymentService.CheckoutRequest(100L, "PIX"), "auth_u1"));
+            assertEquals(first.get().paymentId(), second.get().paymentId());
+            assertEquals(1, jdbcTemplate.countPayments());
+        }
+    }
+
+    @Test
+    void coincidenciaEntreIdArtistaEIdUsuarioNaoAutorizaAcessoFinanceiro() {
+        jdbcTemplate.addUser(4L, "auth_artist_owner", "artista-real", "Artista Real", true);
+        jdbcTemplate.associateArtistUser(2L, 4L);
+        service.checkout(new PaymentService.CheckoutRequest(100L, "PIX"), "auth_u1");
+
+        ResponseStatusException orderPaymentsDenied = assertThrows(
+                ResponseStatusException.class,
+                () -> service.listOrderPayments(100L, "auth_u2")
+        );
+        assertEquals(403, orderPaymentsDenied.getStatusCode().value());
+        assertTrue(service.listArtistSales("auth_u2").isEmpty());
+        assertEquals(1, service.listArtistSales("auth_artist_owner").size());
     }
 
     @Test
@@ -62,6 +137,42 @@ class PaymentServiceSafetyTest {
         assertEquals("Pago", processed.dbStatus());
         assertEquals("Em andamento", processed.orderStatus());
         assertEquals(new BigDecimal("150.00"), processed.amount());
+        assertEquals(new BigDecimal("0.08"), jdbcTemplate.latestPayment().taxaPercentual);
+        assertEquals(new BigDecimal("12.00"), jdbcTemplate.latestPayment().taxaPlataforma);
+        assertEquals(new BigDecimal("138.00"), jdbcTemplate.latestPayment().valorArtista);
+        assertEquals(1, jdbcTemplate.countRetentionMovements());
+        assertEquals(1L, jdbcTemplate.latestRetentionMovement().idCliente);
+        assertEquals(2L, jdbcTemplate.latestRetentionMovement().idArtista);
+        assertEquals(new BigDecimal("138.00"), jdbcTemplate.latestRetentionMovement().valor);
+    }
+
+    @Test
+    void aprovacaoRepetidaRegistraUmaUnicaMovimentacaoDeRetencao() {
+        PaymentService.PaymentView checkout = service.checkout(
+                new PaymentService.CheckoutRequest(100L, "PIX"), "auth_u1");
+        service.simulate(checkout.paymentId(), "APPROVED", "segredo-dev", "auth_u1");
+        service.simulate(checkout.paymentId(), "APPROVED", "segredo-dev", "auth_u1");
+
+        assertEquals(new BigDecimal("0.08"), jdbcTemplate.latestPayment().taxaPercentual);
+        assertEquals(new BigDecimal("12.00"), jdbcTemplate.latestPayment().taxaPlataforma);
+        assertEquals(new BigDecimal("138.00"), jdbcTemplate.latestPayment().valorArtista);
+        assertEquals(1, jdbcTemplate.countRetentionMovements());
+    }
+
+    @Test
+    void falhaAoRegistrarRetencaoEPropagada() {
+        PaymentService.PaymentView checkout = service.checkout(
+                new PaymentService.CheckoutRequest(100L, "PIX"), "auth_u1");
+        jdbcTemplate.failMovementInsert(true);
+
+        assertThrows(
+                org.springframework.dao.DataAccessResourceFailureException.class,
+                () -> service.processSimulatedPayment(
+                        checkout.paymentId(),
+                        new PaymentService.ProcessPaymentRequest("PIX", null, null, null, 1, null, "APPROVED"),
+                        "auth_u1")
+        );
+        assertEquals(0, jdbcTemplate.countRetentionMovements());
     }
 
     @Test

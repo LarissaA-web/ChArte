@@ -1,6 +1,6 @@
 <section class="dashboard" aria-labelledby="dashboard-title">
   <header class="dashboard-heading">
-    <div><h2 id="dashboard-title">Visão geral</h2><p>Pedidos e desempenho das suas comissões.</p></div>
+    <div><h2 id="dashboard-title">Visão geral</h2><p>Resumo financeiro e desempenho das suas comissões.</p></div>
     <span class="period-chip">{{ totalComissoes }} comissões no total</span>
   </header>
 
@@ -14,9 +14,34 @@
     }
   </section>
 
+  <section class="finance-section" aria-label="Resumo financeiro">
+    <header class="finance-heading"><div><h3>Financeiro</h3><p>Valores de pagamentos aprovados e movimentações registradas.</p></div>
+      @if (resumoFinanceiro) { <button type="button" class="finance-refresh" (click)="atualizarFinanceiro.emit()">Atualizar</button> }
+    </header>
+    @if (carregandoFinanceiro) { <p class="finance-state">Carregando dados financeiros…</p> }
+    @else if (erroFinanceiro) { <div class="finance-state finance-error" role="alert"><span>{{ erroFinanceiro }}</span><button type="button" (click)="atualizarFinanceiro.emit()">Tentar novamente</button></div> }
+    @else if (resumoFinanceiro; as financeiro) {
+      <div class="metric-grid financial-grid">
+        <article class="metric-card"><span class="metric-icon">R$</span><span class="metric-label">Saldo disponível</span><strong>{{ financeiro.availableBalance | currency:'BRL' }}</strong><small>registrado como liberado</small></article>
+        <article class="metric-card"><span class="metric-icon">◷</span><span class="metric-label">Saldo retido</span><strong>{{ financeiro.heldBalance | currency:'BRL' }}</strong><small>aguardando confirmação/liberação</small></article>
+        <article class="metric-card"><span class="metric-icon">∑</span><span class="metric-label">Ganhos totais líquidos</span><strong>{{ financeiro.artistNet === null ? 'Dados incompletos' : (financeiro.artistNet | currency:'BRL') }}</strong><small>{{ financeiro.approvedPayments }} pagamentos aprovados</small></article>
+        <article class="metric-card"><span class="metric-icon">↗</span><span class="metric-label">Faturamento bruto</span><strong>{{ financeiro.grossRevenue === null ? 'Dados incompletos' : (financeiro.grossRevenue | currency:'BRL') }}</strong><small>vendas aprovadas</small></article>
+        <article class="metric-card"><span class="metric-icon">8%</span><span class="metric-label">Taxas ChArte</span><strong>{{ financeiro.platformFees === null ? 'Dados incompletos' : (financeiro.platformFees | currency:'BRL') }}</strong><small>valores persistidos nos pagamentos</small></article>
+        <article class="metric-card"><span class="metric-icon">✦</span><span class="metric-label">Vendas de artes prontas</span><strong>{{ financeiro.readyArtSales }}</strong><small>classificadas por vínculo com portfólio</small></article>
+        <article class="metric-card"><span class="metric-icon">✎</span><span class="metric-label">Comissões</span><strong>{{ financeiro.commissions }}</strong><small>classificadas por registro de comissão</small></article>
+      </div>
+      @if (financeiro.approvedPaymentsMissingMovements || financeiro.movementsWithoutApprovedPayment || financeiro.financialFieldDiscrepancies || financeiro.unclassifiedPayments) {
+        <aside class="finance-notice" role="status">
+          @if (financeiro.approvedPaymentsMissingMovements) { <p>{{ financeiro.approvedPaymentsMissingMovements }} pagamento(s) aprovado(s) sem movimentação financeira correspondente.</p> }
+          @if (financeiro.movementsWithoutApprovedPayment) { <p>{{ financeiro.movementsWithoutApprovedPayment }} crédito(s) retido(s) sem pagamento aprovado correspondente; confira antes de considerar estes valores liberados.</p> }
+          @if (financeiro.financialFieldDiscrepancies) { <p>{{ financeiro.financialFieldDiscrepancies }} pagamento(s) com campos financeiros ausentes ou divergentes; os valores persistidos foram mantidos.</p> }
+          @if (financeiro.unclassifiedPayments) { <p>{{ financeiro.unclassifiedPayments }} pagamento(s) sem classificação confiável entre arte pronta e comissão.</p> }
+        </aside>
+      }
+    }
+  </section>
+
   <div class="metric-grid">
-    <article class="metric-card"><span class="metric-icon">R$</span><span class="metric-label">Ganhos deste mês</span><strong>{{ metricas.ganhos | currency:'BRL' }}</strong><small>comissões pagas e concluídas no mês</small></article>
-    <article class="metric-card"><span class="metric-icon">∑</span><span class="metric-label">Receita acumulada</span><strong>{{ (metricas.receitaTotal ?? metricas.ganhos) | currency:'BRL' }}</strong><small>{{ metricas.finalizadas }} concluídas · {{ metricas.andamento }} em andamento/entrega</small></article>
     <article class="metric-card"><span class="metric-icon">✦</span><span class="metric-label">Fluxo ativo</span><strong>{{ metricas.pendentes + metricas.andamento }}</strong><small>{{ metricas.pendentes }} aguardando · {{ metricas.andamento }} em produção/entrega</small></article>
     <article class="metric-card"><span class="metric-icon star-icon">★</span><span class="metric-label">Avaliação média</span><strong>{{ avaliacao | number:'1.1-1' }}</strong><small>{{ totalObras }} obras no portfólio</small></article>
   </div>
@@ -55,14 +80,41 @@
     </article>
 
     <article class="chart-card earnings-card">
-      <header><div><h3>Ganhos por mês</h3><p>Comissões finalizadas neste ano</p></div><strong>{{ resumoMaiorValor(dados.ganhosPorMes) | currency:'BRL':'symbol':'1.0-0' }}<small>maior valor mensal</small></strong></header>
-      @if (existeGanhoNoPeriodo) {
-        <svg class="line-chart" viewBox="0 0 720 210" role="img" aria-label="Ganhos mensais com comissões finalizadas neste ano">
+      <header><div><h3>Faturamento mensal</h3><p>Bruto de pagamentos aprovados, agrupado pela data da movimentação de retenção.</p></div>
+        @if (resumoFinanceiro) { <strong>{{ resumoMaiorValor(faturamentoMensal) | currency:'BRL':'symbol':'1.0-0' }}<small>maior mês registrado</small></strong> }
+      </header>
+      @if (carregandoFinanceiro) { <p class="chart-empty">Carregando faturamento mensal…</p> }
+      @else if (erroFinanceiro) { <p class="chart-empty">O faturamento mensal não pôde ser carregado.</p> }
+      @else if (resumoFinanceiro && existeFaturamentoMensal) {
+        <svg class="line-chart" viewBox="0 0 720 210" role="img" aria-label="Faturamento bruto mensal baseado em pagamentos aprovados">
           <g class="chart-grid-lines"><line x1="38" y1="50" x2="708" y2="50"/><line x1="38" y1="114" x2="708" y2="114"/><line x1="38" y1="178" x2="708" y2="178"/></g>
-          <polyline class="income-line" [attr.points]="pontosLinha(dados.ganhosPorMes)" />
-          @for (ponto of linha(dados.ganhosPorMes); track ponto.periodo) { <g><title>{{ ponto.rotulo }}: {{ ponto.valor | currency:'BRL' }}</title><circle class="income-point" [attr.cx]="ponto.x" [attr.cy]="ponto.y" r="4"/><text class="axis-label" [attr.x]="ponto.x" y="202">{{ ponto.rotulo }}</text></g> }
+          <polyline class="income-line" [attr.points]="pontosLinha(faturamentoMensal)" />
+          @for (ponto of linha(faturamentoMensal); track ponto.periodo) { <g><title>{{ ponto.periodo }}: {{ ponto.valor | currency:'BRL' }}</title><circle class="income-point" [attr.cx]="ponto.x" [attr.cy]="ponto.y" r="4"/><text class="axis-label" [attr.x]="ponto.x" y="202">{{ ponto.rotulo }}</text></g> }
         </svg>
-      } @else { <p class="chart-empty">Os ganhos aparecerão após a conclusão de comissões.</p> }
+      } @else if (resumoFinanceiro) { <p class="chart-empty">Ainda não há movimentações datadas para compor o gráfico mensal.</p> }
+      @else { <p class="chart-empty">Os dados mensais não estão disponíveis.</p> }
     </article>
   </div>
+
+  <section class="finance-history" aria-labelledby="movement-history-title">
+    <header><div><h3 id="movement-history-title">Movimentações financeiras</h3><p>@if (erroMovimentacoes) { Histórico indisponível } @else { {{ totalMovimentacoesFinanceiras }} registro(s) no histórico }</p></div>
+      @if (resumoFinanceiro) { <button type="button" class="finance-refresh" (click)="atualizarFinanceiro.emit()">Atualizar</button> }
+    </header>
+    @if (carregandoMovimentacoes) { <p class="finance-state">Carregando movimentações…</p> }
+    @else if (erroMovimentacoes) { <div class="finance-state finance-error" role="alert"><span>{{ erroMovimentacoes }}</span><button type="button" (click)="atualizarFinanceiro.emit()">Tentar novamente</button></div> }
+    @else if (movimentacoesFinanceiras.length) {
+      <div class="movement-list">
+        @for (movimento of movimentacoesFinanceiras; track movimento.id) {
+          <article class="movement-row"><span class="movement-mark" aria-hidden="true">↔</span><div class="movement-copy"><strong>{{ movimento.description || movimento.type }}</strong><small>{{ movimento.type }} · {{ movimento.createdAt | date:'medium' }}@if (movimento.paymentId) { · Pagamento #{{ movimento.paymentId }} }</small></div><strong class="movement-amount">{{ movimento.amount | currency:'BRL' }}</strong></article>
+        }
+      </div>
+    } @else { <p class="finance-state">Nenhuma movimentação financeira registrada.</p> }
+    @if (!erroMovimentacoes && totalMovimentacoesFinanceiras > 20) {
+      <nav class="movement-pagination" aria-label="Paginação das movimentações">
+        <button type="button" [disabled]="paginaMovimentacoesFinanceiras === 0 || carregandoMovimentacoes" (click)="mudarPaginaMovimentacoes.emit(paginaMovimentacoesFinanceiras - 1)">Anterior</button>
+        <span>Página {{ paginaMovimentacoesFinanceiras + 1 }} de {{ totalPaginasMovimentacoes }}</span>
+        <button type="button" [disabled]="paginaMovimentacoesFinanceiras + 1 >= totalPaginasMovimentacoes || carregandoMovimentacoes" (click)="mudarPaginaMovimentacoes.emit(paginaMovimentacoesFinanceiras + 1)">Próxima</button>
+      </nav>
+    }
+  </section>
 </section>

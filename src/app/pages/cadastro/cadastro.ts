@@ -6,6 +6,7 @@ import {
   AuthService,
   SignUpResult,
 } from '../../../services/auth.service';
+import { hasMinimumAge, latestEligibleBirthDate } from '../../../services/age-validation';
 
 interface SlotGaleria {
   imagem: string;
@@ -64,11 +65,7 @@ export class Cadastro {
     'Outro',
   ];
 
-  readonly dataMaxima = new Date(
-    Date.now() - 13 * 365 * 24 * 60 * 60 * 1000,
-  )
-    .toISOString()
-    .split('T')[0];
+  readonly dataMaxima = latestEligibleBirthDate(16);
 
   private readonly imagensGaleria = [
     '/styles-icons/fantasy_style.jpeg',
@@ -237,33 +234,25 @@ export class Cadastro {
     this.erros = {};
   }
 
-  private calcularIdade(dataNascimento: string): number {
-    const hoje = new Date();
-    const nascimento = new Date(dataNascimento);
-    let idade = hoje.getFullYear() - nascimento.getFullYear();
-    const mesAtual = hoje.getMonth();
-    const mesNascimento = nascimento.getMonth();
-    if (
-      mesAtual < mesNascimento ||
-      (mesAtual === mesNascimento && hoje.getDate() < nascimento.getDate())
-    ) {
-      idade--;
-    }
-    return idade;
-  }
-
   private validarTelefone(telefone: string): boolean {
     const telefoneLimpo = telefone.replace(/\D/g, '');
     return telefoneLimpo.length >= 10 && telefoneLimpo.length <= 11;
   }
 
-  atualizarCorData(): void {
-    const input = document.querySelector(
-      'input[name="dataNascimento"]',
-    ) as HTMLInputElement | null;
-    if (input) {
-      input.style.color = input.value ? '#fff' : 'rgba(255, 255, 255, 0.4)';
+  abrirCalendarioDataNascimento(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    if (typeof input.showPicker !== 'function') return;
+    try {
+      input.showPicker();
+    } catch {
+      // Alguns navegadores já abrem o calendário nativamente ao clicar no campo.
     }
+  }
+
+  atualizarDataNascimento(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    this.dataNascimento = input.value;
+    input.style.color = input.value ? '#fff' : 'rgba(255, 255, 255, 0.4)';
   }
 
   /**
@@ -298,17 +287,11 @@ export class Cadastro {
     if (!this.dataNascimento) {
       this.erros['dataNascimento'] = 'Informe sua data de nascimento.';
     } else {
-      const nascimento = new Date(`${this.dataNascimento}T00:00:00`);
-      const hoje = new Date();
-
-      if (
-        !Number.isFinite(nascimento.getTime()) ||
-        nascimento > hoje
-      ) {
+      if (!hasMinimumAge(this.dataNascimento, 0)) {
         this.erros['dataNascimento'] = 'Data de nascimento inválida.';
-      } else if (this.calcularIdade(this.dataNascimento) < 13) {
+      } else if (!hasMinimumAge(this.dataNascimento, 16)) {
         this.erros['dataNascimento'] =
-          'Você deve ter pelo menos 13 anos para se cadastrar.';
+          'Você deve ter pelo menos 16 anos para se cadastrar.';
       }
     }
 

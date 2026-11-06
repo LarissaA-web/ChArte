@@ -120,6 +120,10 @@ export class PinService {
       return null;
     }
 
+    const estiloCatalogo = dados.estilo.trim()
+      ? await this.resolverEstilo(dados.estilo)
+      : { disponivel: false, id: null };
+
     let caminhoImagem = dados.portfolio;
 
     if (dados.arquivo) {
@@ -152,16 +156,19 @@ export class PinService {
       }
     }
 
+    const novoPortfolio: Record<string, unknown> = {
+      id_artista: perfil.idArtista,
+      id_categoria: categoriaData.id_categoria,
+      titulo: dados.titulo,
+      descricao: dados.descricao,
+      preco: dados.preco,
+      imagem: caminhoImagem,
+    };
+    if (estiloCatalogo.disponivel) novoPortfolio['id_estilo'] = estiloCatalogo.id;
+
     const { data, error } = await supabase
       .from('portifolio')
-      .insert({
-        id_artista: perfil.idArtista,
-        id_categoria: categoriaData.id_categoria,
-        titulo: dados.titulo,
-        descricao: dados.descricao,
-        preco: dados.preco,
-        imagem: caminhoImagem,
-      })
+      .insert(novoPortfolio)
       .select(
         'id_portifolio, id_artista, id_categoria, titulo, descricao, preco, imagem, data_envio'
       )
@@ -194,15 +201,18 @@ export class PinService {
   }
 
   async atualizarArte(arte: Post): Promise<boolean> {
+    const estiloCatalogo = await this.resolverEstilo(arte.estilo ?? '');
+    const atualizacao: Record<string, unknown> = {
+      titulo: arte.titulo,
+      descricao: arte.descricao,
+      preco: arte.preco,
+      imagem: arte.portfolio,
+      id_categoria: arte.categoria.id,
+    };
+    if (estiloCatalogo.disponivel) atualizacao['id_estilo'] = estiloCatalogo.id;
     const { error } = await supabase
       .from('portifolio')
-      .update({
-        titulo: arte.titulo,
-        descricao: arte.descricao,
-        preco: arte.preco,
-        imagem: arte.portfolio,
-        id_categoria: arte.categoria.id,
-      })
+      .update(atualizacao)
       .eq('id_portifolio', arte.id);
 
     if (error) {
@@ -293,26 +303,18 @@ export class PinService {
   }
 
   private async carregarArtesDoBanco(): Promise<void> {
-    const { data, error } = await supabase
+    const camposBase = `
+        id_portifolio, id_artista, id_categoria, titulo, descricao, preco, imagem, data_envio,
+        artista (id_artista, nome_artistico),
+        categoria (id_categoria, nome_categoria)`;
+    let { data, error } = await supabase
       .from('portifolio')
-      .select(`
-        id_portifolio,
-        id_artista,
-        id_categoria,
-        titulo,
-        descricao,
-        preco,
-        imagem,
-        data_envio,
-        artista (
-          id_artista,
-          nome_artistico
-        ),
-        categoria (
-          id_categoria,
-          nome_categoria
-        )
-      `);
+      .select(`${camposBase}, id_estilo, estilo (id_estilo, nome_estilo)`);
+
+    // Antes da migration de catálogo, carregue os posts pelo schema já existente.
+    if (error && /estilo|id_estilo|relationship/i.test(error.message)) {
+      ({ data, error } = await supabase.from('portifolio').select(camposBase));
+    }
 
     if (error) {
       console.error('Erro ao carregar artes:', error);
@@ -357,7 +359,7 @@ export class PinService {
         portfolio: this.obterUrlImagem(item.imagem),
         nomeArtistico: artista?.nome_artistico ?? item.artista?.nome_artistico ?? 'Artista',
         preco: Number(item.preco),
-        estilo: undefined,
+        estilo: item.estilo?.nome_estilo ?? undefined,
         tags: undefined,
         criadoEm: item.data_envio,
         usuario: {
@@ -396,6 +398,16 @@ export class PinService {
       .getPublicUrl(imagem);
 
     return data.publicUrl;
+  }
+
+  private async resolverEstilo(nome: string): Promise<{ disponivel: boolean; id: number | null }> {
+    const { data, error } = await supabase
+      .from('estilo')
+      .select('id_estilo')
+      .ilike('nome_estilo', nome.trim())
+      .maybeSingle();
+    if (error) return { disponivel: false, id: null };
+    return { disponivel: true, id: data ? Number(data.id_estilo) : null };
   }
 
   private async recarregarCache(): Promise<void> {

@@ -41,6 +41,11 @@ public class FollowerController {
         return followerService.listFollowing(username);
     }
 
+    @GetMapping("/me/following-ids")
+    public List<Long> listCurrentUserFollowingIds(@AuthenticationPrincipal Jwt jwt) {
+        return followerService.listFollowingIds(jwt != null ? jwt.getSubject() : null);
+    }
+
     @PostMapping("/{username}")
     public FollowSummaryView follow(
             @PathVariable String username,

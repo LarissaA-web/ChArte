@@ -11,6 +11,7 @@ import {
   ehCompraDiretaArte,
 } from '../app/models/artist-area';
 import { supabase } from '../app/core/supabase/supabase.client';
+import { CommissionDeliveryService } from './commission-delivery.service';
 import { map, catchError, tap, switchMap } from 'rxjs/operators';
 
 const PRIVACIDADE_PADRAO: PrivacidadeArtista = {
@@ -54,7 +55,7 @@ export class ArtistAreaService {
   private readonly STATUS_STORAGE_KEY = 'charte_status_comissao_v1';
   private readonly ENTREGAS_STORAGE_KEY = 'charte_entregas_comissao_v1';
 
-  constructor() {
+  constructor(private readonly commissionDelivery: CommissionDeliveryService) {
     this.carregarTudo();
   }
 
@@ -197,6 +198,16 @@ export class ArtistAreaService {
       arquivosEntrega?: ArquivoEntregaComissao[];
     }>(this.ENTREGAS_STORAGE_KEY);
 
+    const previewsEntregaPrivada = new Map<number, string>();
+    await Promise.all(pedidos.map(async (item: any) => {
+      const refs = Array.isArray(item.referencias) ? item.referencias as string[] : [];
+      const marcador = refs.find((ref) => typeof ref === 'string' && ref.startsWith('ENTREGA_ARQUIVO::'));
+      const caminho = marcador?.slice('ENTREGA_ARQUIVO::'.length);
+      if (!caminho || /^(https?:|data:|blob:|\/)/i.test(caminho)) return;
+      const preview = await this.commissionDelivery.criarPreviaAutorizada(Number(item.id_pedido), caminho);
+      if (preview) previewsEntregaPrivada.set(Number(item.id_pedido), preview);
+    }));
+
     const statusConhecidos: StatusComissao[] = [
       'Solicitada',
       'Aguardando aprovação do cliente',
@@ -313,9 +324,12 @@ export class ArtistAreaService {
       const refArquivosJson = refsBrutas.find(
         (r) => typeof r === 'string' && r.startsWith('ENTREGA_ARQUIVOS_JSON::'),
       );
-      const arquivoEntregaRemoto = refArquivo
+      const arquivoEntregaPersistido = refArquivo
         ? refArquivo.slice('ENTREGA_ARQUIVO::'.length)
         : undefined;
+      const arquivoEntregaRemoto = arquivoEntregaPersistido && !/^(https?:|data:|blob:|\/)/i.test(arquivoEntregaPersistido)
+        ? previewsEntregaPrivada.get(Number(item.id_pedido))
+        : arquivoEntregaPersistido;
       const observacaoEntregaRemota = refObs
         ? refObs.slice('ENTREGA_OBS::'.length)
         : undefined;
@@ -800,112 +814,13 @@ export class ArtistAreaService {
 
   async registrarEntrega(
     id: number,
-    arquivoEntrega: string,
+    arquivoFile: File,
     observacaoEntrega: string,
-    arquivoFile?: File,
-    arquivosExtras?: ArquivoEntregaComissao[],
   ): Promise<boolean> {
-    let urlFinal = arquivoEntrega;
-
-    if (arquivoFile) {
-      try {
-        const { data: authData } = await supabase.auth.getUser();
-        const userId = authData?.user?.id || 'entregas';
-        const extensao = arquivoFile.name.split('.').pop()?.toLowerCase() || 'png';
-        const nomeArquivo = `${crypto.randomUUID()}.${extensao}`;
-        const caminho = `artes/${userId}/entrega_${id}_${nomeArquivo}`;
-        const { error: uploadError } = await supabase.storage
-          .from('uploads')
-          .upload(caminho, arquivoFile, {
-            upsert: true,
-            contentType: arquivoFile.type || 'image/png',
-          });
-        if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage
-            .from('uploads')
-            .getPublicUrl(caminho);
-          if (publicUrlData?.publicUrl) {
-            urlFinal = publicUrlData.publicUrl;
-          }
-        }
-      } catch {
-        // Mantém data:image URL caso upload no bucket não esteja disponível
-      }
-    }
-
-    const listaArquivos: ArquivoEntregaComissao[] =
-      arquivosExtras && arquivosExtras.length > 0
-        ? arquivosExtras.map((arq, idx) => (idx === 0 ? { ...arq, url: urlFinal || arq.url } : arq))
-        : [{ nome: arquivoFile?.name || 'Arquivo da comissão', url: urlFinal, tipo: arquivoFile?.type }];
-
-    const entregasLocais = this.lerMapaLocal<{
-      arquivoEntrega: string;
-      observacaoEntrega: string;
-      arquivosEntrega?: ArquivoEntregaComissao[];
-    }>(this.ENTREGAS_STORAGE_KEY);
-    entregasLocais[String(id)] = {
-      arquivoEntrega: urlFinal,
-      observacaoEntrega,
-      arquivosEntrega: listaArquivos,
-    };
-    this.salvarMapaLocal(this.ENTREGAS_STORAGE_KEY, entregasLocais);
-
-    const statusLocais = this.lerMapaLocal<{ status: StatusComissao; concluidaEm?: string }>(
-      this.STATUS_STORAGE_KEY,
-    );
-    statusLocais[String(id)] = { status: 'Entregue' };
-    this.salvarMapaLocal(this.STATUS_STORAGE_KEY, statusLocais);
-
-    const comissaoAtual = this.obterComissao(id);
-    const refsCliente = (comissaoAtual?.referencias ?? []).filter(
-      (r) =>
-        typeof r === 'string' &&
-        !r.startsWith('ENTREGA_ARQUIVO::') &&
-        !r.startsWith('ENTREGA_OBS::') &&
-        !r.startsWith('ENTREGA_ARQUIVOS_JSON::'),
-    );
-    const referenciasComEntrega = [
-      ...refsCliente,
-      `ENTREGA_ARQUIVO::${urlFinal}`,
-      `ENTREGA_ARQUIVOS_JSON::${JSON.stringify(listaArquivos)}`,
-      ...(observacaoEntrega ? [`ENTREGA_OBS::${observacaoEntrega}`] : []),
-    ];
-
-    const { error } = await supabase
-      .from('pedidos_principal')
-      .update({
-        status_comissao: 'Entregue',
-        status_pedido: 'Entregue para Avaliação do Cliente',
-        referencias: referenciasComEntrega,
-      })
-      .eq('id_pedido', id);
-
-    if (error) {
-      await supabase
-        .from('pedidos_principal')
-        .update({
-          status_comissao: 'Entregue',
-          status_pedido: 'Entregue para Avaliação do Cliente',
-        })
-        .eq('id_pedido', id);
-    }
-
-    this.comissoesSubject.next(
-      this.comissoesSubject.value.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: 'Entregue',
-              pagamentoStatus: 'pago',
-              pagamentoLiberado: false,
-              arquivoEntrega: urlFinal,
-              arquivosEntrega: listaArquivos,
-              observacaoEntrega,
-            }
-          : item,
-      ),
-    );
-
+    await this.commissionDelivery.registrarEntrega(id, arquivoFile, observacaoEntrega);
+    this.comissoesSubject.next(this.comissoesSubject.value.map((item) => item.id === id
+      ? { ...item, status: 'Entregue', pagamentoLiberado: false, observacaoEntrega }
+      : item));
     await this.carregarComissoes();
     return true;
   }

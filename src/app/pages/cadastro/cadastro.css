@@ -168,8 +168,9 @@
 }
 .signup-field input[type="date"]::-webkit-calendar-picker-indicator {
   opacity: 0;
-  width: 100%;
-  height: 100%;
+  width: 18px;
+  height: 18px;
+  margin-right: 14px;
   cursor: pointer;
 }
 .signup-segment {
@@ -211,17 +212,31 @@
 }
 .signup-trio {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns:
+    minmax(0, 1.2fr)
+    minmax(0, 0.9fr)
+    minmax(0, 1.1fr);
+  gap: clamp(6px, 0.85vw, 12px);
   align-items: start;
 }
 .signup-trio .signup-field {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 .signup-trio .signup-field input,
 .signup-trio .signup-field select {
-  height: 48px;
+  height: clamp(40px, calc(35px + 0.68vw), 48px);
+  min-height: 40px;
+  min-width: 0;
+  max-width: 100%;
+  padding-left: clamp(8px, 1.1vw, 16px);
+}
+.signup-trio .signup-field input[type="date"],
+.signup-trio .signup-field select {
+  padding-right: clamp(36px, calc(31px + 0.68vw), 44px);
+  background-position: right clamp(10px, 0.73vw, 14px) center;
+  background-size: clamp(16px, 1.04vw, 20px);
 }
 .signup-hint {
   margin: -2px 0 0;
@@ -524,6 +539,16 @@
     width: min(100%, 960px);
     max-height: none;
     overflow-y: visible;
+  }
+}
+@media (min-width: 901px) and (max-width: 1240px) {
+  .signup-trio {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .signup-trio {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 560px) {

@@ -158,7 +158,9 @@ import { Subscription, combineLatest } from 'rxjs';
                 </div>
               </div>
 
-              @if (historicoPedido.length > 0) {
+              @if (historicoPedidoErro) {
+                <p class="empty-tx" role="alert">{{ historicoPedidoErro }}</p>
+              } @else if (historicoPedido.length > 0) {
                 <div class="tx-list">
                   @for (tx of historicoPedido; track tx.paymentId) {
                     <div class="tx-item">
@@ -529,7 +531,7 @@ import { Subscription, combineLatest } from 'rxjs';
 
                 @if (pagamentoMensagem) {
                   <div class="payment-feedback-box" [class.error]="pagamentoErro" [class.success]="!pagamentoErro">
-                    <strong>{{ pagamentoErro ? 'Pagamento não aprovado' : 'Atualização do pagamento' }}</strong>
+                    <strong>{{ pagamentoTitulo }}</strong>
                     <p>{{ pagamentoMensagem }}</p>
                   </div>
                 }
@@ -743,6 +745,7 @@ export class OrderDetail implements OnInit, OnDestroy {
   processandoSimulacao = false;
   pagamentoMensagem = '';
   pagamentoErro = false;
+  pagamentoTitulo = 'Atualização do pagamento';
   statusMensagem = '';
   statusErro = false;
   statusCarregando = false;
@@ -751,6 +754,7 @@ export class OrderDetail implements OnInit, OnDestroy {
   checkoutAtivo = false;
   transacaoAtual: PaymentView | null = null;
   historicoPedido: PaymentView[] = [];
+  historicoPedidoErro = '';
   pixCopiado = false;
 
   cartaoTitular = 'CLIENTE TESTE CHARTE';
@@ -787,7 +791,7 @@ export class OrderDetail implements OnInit, OnDestroy {
   }
 
   get podePagar(): boolean {
-    if (!this.pedido) return false;
+    if (!this.pedido || !this.ehClienteDoPedido) return false;
     return (
       this.pedido.status === 'Pendente' &&
       this.pedido.pagamentoStatus !== 'pago'
@@ -929,10 +933,11 @@ export class OrderDetail implements OnInit, OnDestroy {
   }
 
   async iniciarPagamento(): Promise<void> {
-    if (!this.pedido || !this.podePagar || this.pagamentoCarregando) return;
+    if (!this.pedido || !this.ehClienteDoPedido || !this.podePagar || this.pagamentoCarregando || this.processandoSimulacao) return;
     this.pagamentoCarregando = true;
     this.pagamentoErro = false;
     this.pagamentoMensagem = '';
+    this.pagamentoTitulo = 'Atualização do pagamento';
     this.cdr.detectChanges();
 
     try {
@@ -952,9 +957,7 @@ export class OrderDetail implements OnInit, OnDestroy {
       }
       await this.carregarHistoricoPedido(this.pedido!.id);
     } catch (err: any) {
-      this.pagamentoErro = true;
-      this.pagamentoMensagem =
-        err?.message || 'Não foi possível iniciar o checkout simulado.';
+      this.definirErroPagamento(err, 'Não foi possível iniciar o checkout simulado.');
     } finally {
       this.pagamentoCarregando = false;
       this.cdr.detectChanges();
@@ -962,17 +965,19 @@ export class OrderDetail implements OnInit, OnDestroy {
   }
 
   async confirmarPagamentoSimulado(): Promise<void> {
-    if (!this.pedido || this.processandoSimulacao) return;
+    if (!this.pedido || !this.ehClienteDoPedido || !this.podePagar || this.processandoSimulacao || this.pagamentoCarregando) return;
 
     if (this.metodoPagamento === 'card') {
       if (this.cartaoTitular.trim().length < 3) {
         this.pagamentoErro = true;
+        this.pagamentoTitulo = 'Confira os dados do pagamento';
         this.pagamentoMensagem = 'Informe o nome do titular do cartão simulado.';
         this.cdr.detectChanges();
         return;
       }
       if (!/^\d{4}$/.test(this.cartaoUltimos4.trim())) {
         this.pagamentoErro = true;
+        this.pagamentoTitulo = 'Confira os dados do pagamento';
         this.pagamentoMensagem = 'Informe exatamente os 4 últimos dígitos do cartão simulado.';
         this.cdr.detectChanges();
         return;
@@ -982,6 +987,7 @@ export class OrderDetail implements OnInit, OnDestroy {
     this.processandoSimulacao = true;
     this.pagamentoErro = false;
     this.pagamentoMensagem = '';
+    this.pagamentoTitulo = 'Atualização do pagamento';
     this.cdr.detectChanges();
 
     try {
@@ -1049,6 +1055,7 @@ export class OrderDetail implements OnInit, OnDestroy {
       if (aprovado) {
         this.checkoutAtivo = false;
         this.pagamentoErro = false;
+        this.pagamentoTitulo = 'Pagamento aprovado';
         this.pagamentoMensagem = compraDireta
           ? 'Pagamento aprovado! Compra concluída com sucesso.'
           : resultado.simulationDetails ||
@@ -1056,14 +1063,13 @@ export class OrderDetail implements OnInit, OnDestroy {
       } else {
         this.checkoutAtivo = false;
         this.pagamentoErro = true;
+        this.pagamentoTitulo = 'Pagamento recusado na simulação';
         this.pagamentoMensagem =
           resultado.simulationDetails ||
           'Pagamento recusado na simulação. Você pode iniciar uma nova tentativa.';
       }
     } catch (err: any) {
-      this.pagamentoErro = true;
-      this.pagamentoMensagem =
-        err?.message || 'Ocorreu um erro ao processar a simulação de pagamento.';
+      this.definirErroPagamento(err, 'Ocorreu um erro ao processar a simulação de pagamento.');
     } finally {
       this.processandoSimulacao = false;
       this.cdr.detectChanges();
@@ -1161,12 +1167,29 @@ export class OrderDetail implements OnInit, OnDestroy {
   }
 
   private async carregarHistoricoPedido(orderId: number): Promise<void> {
+    this.historicoPedidoErro = '';
     try {
       this.historicoPedido = await this.pagamentos.listarHistoricoPorPedido(orderId);
-    } catch {
+    } catch (error: any) {
       this.historicoPedido = [];
+      this.historicoPedidoErro = error?.message || 'Não foi possível carregar o histórico deste pedido.';
     }
     this.cdr.detectChanges();
+  }
+
+  private definirErroPagamento(error: any, fallback: string): void {
+    this.pagamentoErro = true;
+    const status = Number(error?.status || 0);
+    if (status === 401) {
+      this.pagamentoTitulo = 'Autenticação necessária';
+    } else if (status === 403) {
+      this.pagamentoTitulo = 'Acesso ao pedido não autorizado';
+    } else if (status === 503) {
+      this.pagamentoTitulo = 'Serviço de pagamento indisponível';
+    } else {
+      this.pagamentoTitulo = 'Falha ao processar pagamento';
+    }
+    this.pagamentoMensagem = error?.message || fallback;
   }
 
   async aprovarProposta(): Promise<void> {

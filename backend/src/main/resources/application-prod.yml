@@ -4,5 +4,7 @@ spring:
       initialization-fail-timeout: 1
 
 charte:
+  database:
+    mode: ${CHARTE_DATABASE_MODE:jdbc}
   payment:
-    provider: ${PAYMENT_PROVIDER:}
+    provider: ${CHARTE_PAYMENT_PROVIDER:${PAYMENT_PROVIDER:}}
