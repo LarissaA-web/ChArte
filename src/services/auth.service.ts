@@ -101,6 +101,8 @@ export class AuthService {
   private emailUsuarioLogado = '';
   private listenerRegistrado = false;
   private loginAttemptInProgress = false;
+  /** Auth UID whose database profile was validated for this app session. */
+  private authUidAutorizado: string | null = null;
 
   constructor() {
     this.inicializacaoPromise = this.inicializarSessao();
@@ -141,7 +143,13 @@ export class AuthService {
         this.listenerRegistrado = true;
 
         supabase.auth.onAuthStateChange((evento, sessao) => {
+          // SIGNED_IN may be delivered after signInWithPassword resolves. Do
+          // not let Auth's session alone publish an application login: only
+          // process events for a UID whose database profile was validated.
           if (this.loginAttemptInProgress) return;
+          if (evento === 'SIGNED_IN' || evento === 'TOKEN_REFRESHED' || evento === 'USER_UPDATED') {
+            if (!sessao?.user || sessao.user.id !== this.authUidAutorizado) return;
+          }
           // Evita aguardar consultas ao banco dentro do callback
           // de autenticação do Supabase.
           Promise.resolve().then(async () => {
@@ -155,7 +163,13 @@ export class AuthService {
                 await this.carregarPerfilESessao(sessao.user);
               }
             } else if (evento === 'SIGNED_OUT') {
+              // A rejected login can emit SIGNED_OUT while replacing the
+              // temporary session, then restore a previously valid session.
+              // Ignore a stale event if that authorized session is current.
+              const atual = await supabase.auth.getSession();
+              if (atual.data.session?.user.id === this.authUidAutorizado) return;
               this.emailUsuarioLogado = '';
+              this.authUidAutorizado = null;
               this.usuarioLogadoSubject.next(null);
             }
           });
@@ -188,6 +202,7 @@ export class AuthService {
 
       if (error) {
         console.error('Erro ao consultar perfil:', error.message);
+        this.authUidAutorizado = null;
         this.usuarioLogadoSubject.next(null);
         return;
       }
@@ -197,18 +212,21 @@ export class AuthService {
           'Usuário autenticado, mas sem perfil na tabela usuario.',
           user.id,
         );
+        this.authUidAutorizado = null;
         this.usuarioLogadoSubject.next(null);
         return;
       }
 
       const usuario = usuarioDb as UsuarioBanco;
       if (usuario.status_conta && usuario.status_conta.toLowerCase() !== 'ativo') {
+        this.authUidAutorizado = null;
         this.emailUsuarioLogado = '';
         this.usuarioLogadoSubject.next(null);
         void supabase.auth.signOut({ scope: 'local' });
         return;
       }
       if (!hasMinimumAge(usuario.data_nascimento, 16)) {
+        this.authUidAutorizado = null;
         this.emailUsuarioLogado = '';
         this.usuarioLogadoSubject.next(null);
         void supabase.auth.signOut({ scope: 'local' });
@@ -218,6 +236,7 @@ export class AuthService {
         usuario.tipo_usuario,
       );
       if (!tipoFrontend) {
+        this.authUidAutorizado = null;
         this.usuarioLogadoSubject.next(null);
         return;
       }
@@ -251,9 +270,11 @@ export class AuthService {
       };
 
       this.emailUsuarioLogado = user.email ?? this.emailUsuarioLogado;
+      this.authUidAutorizado = user.id;
       this.usuarioLogadoSubject.next(sessao);
     } catch (erro) {
       console.error('Erro ao carregar perfil da sessão:', erro);
+      this.authUidAutorizado = null;
       this.usuarioLogadoSubject.next(null);
     }
   }
@@ -834,9 +855,11 @@ export class AuthService {
       }
       await supabase.auth.signOut({ scope: 'local' });
       this.emailUsuarioLogado = '';
+      this.authUidAutorizado = null;
       this.usuarioLogadoSubject.next(null);
     } catch {
       this.emailUsuarioLogado = '';
+      this.authUidAutorizado = null;
       this.usuarioLogadoSubject.next(null);
     }
   }

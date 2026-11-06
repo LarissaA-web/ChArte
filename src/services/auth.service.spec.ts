@@ -129,6 +129,28 @@ describe('AuthService login', () => {
     expect(service.getUsuarioLogado()).toBeNull();
   });
 
+  it('ignora SIGNED_IN atrasado da tentativa rejeitada após terminar o login', async () => {
+    const { auth } = preparar('Artista'); sucesso(auth);
+    let listener: ((evento: string, sessao: any) => void) | undefined;
+    vi.spyOn(auth, 'onAuthStateChange').mockImplementation((callback: any) => {
+      listener = callback;
+      return { data: { subscription: { unsubscribe: vi.fn() } } } as any;
+    });
+    const service = new AuthService(); await service.aguardarInicializacao();
+
+    expect((await service.login('ana@example.com', 'senha', 'Comum')).status).toBe('account_type_mismatch');
+    listener?.('SIGNED_IN', {
+      user: { id: 'auth-5', email: 'ana@example.com' },
+      access_token: 'new-token',
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(service.getUsuarioLogado()).toBeNull();
+    expect(service.estaLogado()).toBe(false);
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
   it('diferencia falha de conexão de credenciais incorretas', async () => {
     const { auth } = preparar();
     vi.spyOn(auth, 'signInWithPassword').mockRejectedValue(new TypeError('Failed to fetch'));
