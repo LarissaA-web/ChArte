@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DashboardChartPoint, DashboardData } from './artist-dashboard.models';
 import { StatusComissao } from '../../../models/artist-area';
+import { ArtistFinanceMovement, ArtistFinanceSummary } from '../../../../services/artist-finance.service';
 
 interface BarraGrafico extends DashboardChartPoint {
   x: number;
@@ -29,7 +30,17 @@ export class ArtistDashboard {
     metricas: { semana: 0, mes: 0, ano: 0, ganhos: 0, receitaTotal: 0, pendentes: 0, andamento: 0, finalizadas: 0 },
     comissoesSemana: [], comissoesMes: [], comissoesAno: [], ganhosPorMes: [], comissoesPorStatus: [],
   };
+  @Input() resumoFinanceiro: ArtistFinanceSummary | null = null;
+  @Input() movimentacoesFinanceiras: ArtistFinanceMovement[] = [];
+  @Input() carregandoFinanceiro = false;
+  @Input() erroFinanceiro = '';
+  @Input() carregandoMovimentacoes = false;
+  @Input() erroMovimentacoes = '';
+  @Input() totalMovimentacoesFinanceiras = 0;
+  @Input() paginaMovimentacoesFinanceiras = 0;
   @Output() selecionarStatus = new EventEmitter<StatusComissao>();
+  @Output() atualizarFinanceiro = new EventEmitter<void>();
+  @Output() mudarPaginaMovimentacoes = new EventEmitter<number>();
 
   readonly viewBoxLargura = 720;
   readonly linhaBase = 178;
@@ -39,6 +50,16 @@ export class ArtistDashboard {
   get totalComissoes(): number { return this.dados.comissoesPorStatus.reduce((total, item) => total + item.valor, 0); }
   get statusResumo() { return this.dados.comissoesPorStatus.filter((item) => ['Solicitada', 'Aguardando aprovação do cliente', 'Pendente', 'Em andamento', 'Entregue', 'Finalizada'].includes(item.status)); }
   get existeGanhoNoPeriodo(): boolean { return this.dados.ganhosPorMes.some((item) => item.valor > 0); }
+  get faturamentoMensal(): DashboardChartPoint[] {
+    return (this.resumoFinanceiro?.monthlyRevenue ?? []).map((item) => ({
+      periodo: item.month,
+      rotulo: new Intl.DateTimeFormat('pt-BR', { month: 'short', timeZone: 'UTC' })
+        .format(new Date(`${item.month}-01T00:00:00Z`)).replace('.', ''),
+      valor: item.gross,
+    }));
+  }
+  get existeFaturamentoMensal(): boolean { return this.faturamentoMensal.some((item) => item.valor > 0); }
+  get totalPaginasMovimentacoes(): number { return Math.max(1, Math.ceil(this.totalMovimentacoesFinanceiras / 20)); }
 
   maximo(series: DashboardChartPoint[]): number { return Math.max(1, ...series.map((item) => item.valor)); }
   algumValor(series: DashboardChartPoint[]): boolean { return series.some((item) => item.valor > 0); }

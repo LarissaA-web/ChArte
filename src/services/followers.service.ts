@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { BehaviorSubject, Observable, firstValueFrom } from 'rxjs';
 import { supabase } from '../app/core/supabase/supabase.client';
 import { AuthService } from './auth.service';
@@ -50,6 +50,16 @@ export class FollowersService {
 
   private marcarBackendIndisponivel(): void {
     this.backendIndisponivelAte = Date.now() + 60_000;
+  }
+
+  private propagarErroBackend(error: unknown): void {
+    if (error instanceof HttpErrorResponse && [401, 403, 503].includes(error.status)) {
+      const body = error.error;
+      const message = typeof body === 'string' ? body : body?.message || body?.detail;
+      throw new Error(message || (error.status === 503
+        ? 'A API de seguidores está temporariamente indisponível.'
+        : 'Você não tem autorização para acessar este recurso.'));
+    }
   }
 
   private lerSeguidoresLocais(): LocalFollowEntry[] {
@@ -122,7 +132,8 @@ export class FollowersService {
           this.emitSummary(enriquecido, cleanUsername);
           return enriquecido;
         }
-      } catch {
+      } catch (error) {
+        this.propagarErroBackend(error);
         this.marcarBackendIndisponivel();
       }
     }
@@ -170,9 +181,10 @@ export class FollowersService {
         }
       } catch (err: any) {
         const status = Number(err?.status || 0);
-        if (status === 400 && err?.error?.message) {
+        if ([400, 401, 403, 503].includes(status)) {
           this.removerSeguidorLocal(idSeguidor, idSeguindo);
-          throw new Error(err.error.message);
+          this.propagarErroBackend(err);
+          throw new Error(err?.error?.message || 'Não foi possível seguir este perfil.');
         }
         this.marcarBackendIndisponivel();
       }
@@ -223,7 +235,11 @@ export class FollowersService {
           this.emitSummary(enriquecido, cleanUsername);
           return enriquecido;
         }
-      } catch {
+      } catch (error: any) {
+        if ([401, 403, 503].includes(Number(error?.status || 0))) {
+          this.adicionarSeguidorLocal(idSeguidor, idSeguindo);
+        }
+        this.propagarErroBackend(error);
         this.marcarBackendIndisponivel();
       }
     }
@@ -266,7 +282,8 @@ export class FollowersService {
             `${this.baseUrl}/${encodeURIComponent(cleanUsername)}/followers`,
           ),
         );
-      } catch {
+      } catch (error) {
+        this.propagarErroBackend(error);
         this.marcarBackendIndisponivel();
       }
     }
@@ -305,6 +322,16 @@ export class FollowersService {
 
   async listarSeguindo(username: string): Promise<FollowerProfile[]> {
     const cleanUsername = (username || '').trim().replace(/^@/, '');
+    const currentUser = this.authService.getUsuarioLogado();
+    if (currentUser?.idUsuario && currentUser.nomeUsuario?.toLowerCase() === cleanUsername.toLowerCase() && this.deveTentarBackend()) {
+      try {
+        const ids = await firstValueFrom(this.http.get<number[]>(`${this.baseUrl}/me/following-ids`));
+        return this.buscarPerfisPorIds(ids.map(Number).filter((id) => Number.isFinite(id) && id > 0));
+      } catch (error) {
+        this.propagarErroBackend(error);
+        this.marcarBackendIndisponivel();
+      }
+    }
     let remotos: FollowerProfile[] = [];
     if (this.deveTentarBackend()) {
       try {
@@ -313,7 +340,8 @@ export class FollowersService {
             `${this.baseUrl}/${encodeURIComponent(cleanUsername)}/following`,
           ),
         );
-      } catch {
+      } catch (error) {
+        this.propagarErroBackend(error);
         this.marcarBackendIndisponivel();
       }
     }

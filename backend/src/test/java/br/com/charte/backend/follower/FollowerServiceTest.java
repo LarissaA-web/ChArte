@@ -79,4 +79,11 @@ class FollowerServiceTest {
         );
         assertEquals(401, ex.getStatusCode().value());
     }
+
+    @Test
+    void listaIdsSeguidosDoUsuarioAutenticado() {
+        followerService.follow("artista_pro", "auth_fan");
+
+        assertEquals(List.of(2L), followerService.listFollowingIds("auth_fan"));
+    }
 }

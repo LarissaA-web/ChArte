@@ -132,6 +132,15 @@ public class FollowerService {
         );
     }
 
+    public List<Long> listFollowingIds(String currentAuthId) {
+        UserAccount currentUser = authenticatedUserService.requireUserByAuthId(currentAuthId);
+        return jdbcTemplate.query(
+                "SELECT id_seguindo FROM public.seguidores WHERE id_seguidor = ? ORDER BY id_seguindo",
+                (rs, rowNum) -> rs.getLong("id_seguindo"),
+                currentUser.idUsuario()
+        );
+    }
+
     private FollowSummaryView buildSummary(UserAccount target, Long currentUserId) {
         Long followers = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM public.seguidores WHERE id_seguindo = ?",

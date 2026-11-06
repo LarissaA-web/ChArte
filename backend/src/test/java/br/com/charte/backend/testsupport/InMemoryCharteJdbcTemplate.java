@@ -488,6 +488,17 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
                 return out;
             }
 
+            if (normalized.contains("FROM PUBLIC.SEGUIDORES WHERE ID_SEGUIDOR = ?")) {
+                Long followerId = ((Number) args[0]).longValue();
+                List<T> out = new ArrayList<>();
+                for (FollowRow f : follows) {
+                    if (f.idSeguidor.equals(followerId)) {
+                        out.add(rowMapper.mapRow(mockResultSet(Map.of("id_seguindo", f.idSeguindo)), out.size()));
+                    }
+                }
+                return out;
+            }
+
             throw new UnsupportedOperationException("Unsupported query: " + sql);
         } catch (java.sql.SQLException ex) {
             throw new RuntimeException(ex);

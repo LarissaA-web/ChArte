@@ -10,6 +10,7 @@ import { PerfilService } from '../../../../services/perfil.service';
 import { ModalService } from '../../../../services/modal.service';
 import { PinService } from '../../../../services/pinService';
 import { PaymentService, PaymentView } from '../../../../services/payment.service';
+import { ArtistFinanceMovement, ArtistFinanceService, ArtistFinanceSummary } from '../../../../services/artist-finance.service';
 import {
   ArquivoEntregaComissao,
   AvaliacaoArtista,
@@ -85,6 +86,14 @@ export class ArtistArea implements OnInit, OnDestroy {
 
   vendasArtista: PaymentView[] = [];
   carregandoVendas = false;
+  resumoFinanceiro: ArtistFinanceSummary | null = null;
+  movimentacoesFinanceiras: ArtistFinanceMovement[] = [];
+  totalMovimentacoesFinanceiras = 0;
+  paginaMovimentacoesFinanceiras = 0;
+  carregandoFinanceiro = false;
+  carregandoMovimentacoes = false;
+  erroFinanceiro = '';
+  erroMovimentacoes = '';
   private subscriptions = new Subscription();
 
   constructor(
@@ -95,10 +104,12 @@ export class ArtistArea implements OnInit, OnDestroy {
     private router: Router,
     private modal: ModalService,
     private paymentService: PaymentService,
+    private artistFinance: ArtistFinanceService,
     private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit(): void {
+    void this.carregarDashboardFinanceiro();
     this.subscriptions.add(
       this.artistData.comissoes$.subscribe(() => {
         if (this.comissaoSelecionada) {
@@ -227,13 +238,6 @@ export class ArtistArea implements OnInit, OnDestroy {
   }
   excluirDiretriz(diretriz: DiretrizComissao): void { if (window.confirm(`Excluir a diretriz “${diretriz.titulo}”?`)) this.artistData.excluirDiretriz(diretriz.id, this.perfil.nomeUsuario); }
 
-  selecionarSecao(secao: SecaoArtista): void {
-    this.secaoAtual = secao;
-    this.menuAberto = false;
-    if (secao === 'privacidade' || secao === 'opcoes-comissao') this.privacidade = this.artistData.obterPrivacidade(this.perfil.nomeUsuario);
-    if (secao === 'vendas') void this.carregarVendasArtista();
-  }
-
   private async carregarVendasArtista(): Promise<void> {
     this.carregandoVendas = true;
     this.cdr.detectChanges();
@@ -245,6 +249,65 @@ export class ArtistArea implements OnInit, OnDestroy {
       this.carregandoVendas = false;
       this.cdr.detectChanges();
     }
+  }
+
+  async carregarDashboardFinanceiro(): Promise<void> {
+    this.carregandoFinanceiro = true;
+    this.carregandoMovimentacoes = true;
+    this.erroFinanceiro = '';
+    this.erroMovimentacoes = '';
+    this.cdr.detectChanges();
+
+    const [resumo, movimentos] = await Promise.allSettled([
+      this.artistFinance.getSummary(),
+      this.artistFinance.getMovements(this.paginaMovimentacoesFinanceiras),
+    ]);
+
+    if (resumo.status === 'fulfilled') {
+      this.resumoFinanceiro = resumo.value;
+    } else {
+      this.resumoFinanceiro = null;
+      this.erroFinanceiro = 'Não foi possível carregar os dados financeiros. Tente novamente.';
+    }
+    this.carregandoFinanceiro = false;
+
+    if (movimentos.status === 'fulfilled') {
+      this.movimentacoesFinanceiras = movimentos.value.items;
+      this.totalMovimentacoesFinanceiras = movimentos.value.total;
+    } else {
+      this.movimentacoesFinanceiras = [];
+      this.totalMovimentacoesFinanceiras = 0;
+      this.erroMovimentacoes = 'Não foi possível carregar o histórico de movimentações. Tente novamente.';
+    }
+    this.carregandoMovimentacoes = false;
+    this.cdr.detectChanges();
+  }
+
+  async mudarPaginaMovimentacoes(page: number): Promise<void> {
+    if (page < 0 || page * 20 >= this.totalMovimentacoesFinanceiras) return;
+    this.paginaMovimentacoesFinanceiras = page;
+    this.carregandoMovimentacoes = true;
+    this.erroMovimentacoes = '';
+    this.cdr.detectChanges();
+    try {
+      const result = await this.artistFinance.getMovements(page);
+      this.movimentacoesFinanceiras = result.items;
+      this.totalMovimentacoesFinanceiras = result.total;
+    } catch {
+      this.movimentacoesFinanceiras = [];
+      this.erroMovimentacoes = 'Não foi possível carregar o histórico de movimentações. Tente novamente.';
+    } finally {
+      this.carregandoMovimentacoes = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  selecionarSecao(secao: SecaoArtista): void {
+    this.secaoAtual = secao;
+    this.menuAberto = false;
+    if (secao === 'privacidade' || secao === 'opcoes-comissao') this.privacidade = this.artistData.obterPrivacidade(this.perfil.nomeUsuario);
+    if (secao === 'vendas') void this.carregarVendasArtista();
+    if (secao === 'dashboard') void this.carregarDashboardFinanceiro();
   }
 
   async aceitar(comissao: Comissao): Promise<void> {

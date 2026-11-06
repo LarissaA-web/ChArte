@@ -1,10 +1,17 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, from, firstValueFrom } from 'rxjs';
 import { supabase } from '../app/core/supabase/supabase.client';
 import { AuthService } from './auth.service';
 
 export const PAYMENT_API_BASE_URL = '/api/payments';
+
+export class PaymentApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'PaymentApiError';
+  }
+}
 
 export type MetodoPagamentoInput = 'pix' | 'card' | 'transfer' | 'PIX' | 'Cartao' | 'Transferencia';
 export type StatusPagamentoGateway =
@@ -99,10 +106,14 @@ export class PaymentService {
   }
 
   async iniciarCheckout(orderId: number, method: MetodoPagamentoInput): Promise<PaymentView> {
-    return firstValueFrom(this.http.post<PaymentView>(`${PAYMENT_API_BASE_URL}/checkout`, {
-      orderId,
-      method: this.normalizarMetodoApi(method),
-    }));
+    try {
+      return await firstValueFrom(this.http.post<PaymentView>(`${PAYMENT_API_BASE_URL}/checkout`, {
+        orderId,
+        method: this.normalizarMetodoApi(method),
+      }));
+    } catch (error) {
+      throw this.normalizarErroApi(error);
+    }
   }
 
   async processarPagamentoSimulado(
@@ -110,22 +121,34 @@ export class PaymentService {
     payload: ProcessarPagamentoPayload,
     _orderIdFallback?: number,
   ): Promise<PaymentView> {
-    return firstValueFrom(this.http.post<PaymentView>(
-      `${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}/process`,
-      { ...payload, method: this.normalizarMetodoApi(payload.method) },
-    ));
+    try {
+      return await firstValueFrom(this.http.post<PaymentView>(
+        `${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}/process`,
+        { ...payload, method: this.normalizarMetodoApi(payload.method) },
+      ));
+    } catch (error) {
+      throw this.normalizarErroApi(error);
+    }
   }
 
   async cancelarPagamento(paymentId: string, _orderIdFallback?: number): Promise<PaymentView> {
-    return firstValueFrom(this.http.post<PaymentView>(
-      `${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}/cancel`, {},
-    ));
+    try {
+      return await firstValueFrom(this.http.post<PaymentView>(
+        `${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}/cancel`, {},
+      ));
+    } catch (error) {
+      throw this.normalizarErroApi(error);
+    }
   }
 
   async reembolsarPagamento(paymentId: string, _orderIdFallback?: number): Promise<PaymentView> {
-    return firstValueFrom(this.http.post<PaymentView>(
-      `${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}/refund`, {},
-    ));
+    try {
+      return await firstValueFrom(this.http.post<PaymentView>(
+        `${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}/refund`, {},
+      ));
+    } catch (error) {
+      throw this.normalizarErroApi(error);
+    }
   }
 
   async buscarPorPaymentId(paymentId: string): Promise<PaymentView> {
@@ -136,7 +159,10 @@ export class PaymentService {
         );
       } catch (err: any) {
         if (this.isBusinessError(err)) {
-          throw new Error(err?.error?.message || 'Pagamento não encontrado.');
+          throw this.normalizarErroApi(err);
+        }
+        if (err instanceof HttpErrorResponse && [401, 403, 503].includes(err.status)) {
+          throw this.normalizarErroApi(err);
         }
         this.marcarBackendIndisponivel();
       }
@@ -151,12 +177,40 @@ export class PaymentService {
           this.http.get<PaymentView[]>(`${PAYMENT_API_BASE_URL}/orders/${orderId}/history`),
         );
         return remotas;
-      } catch {
+      } catch (error) {
+        if (error instanceof HttpErrorResponse && [401, 403, 503].includes(error.status)) {
+          throw this.normalizarErroApi(error);
+        }
         this.marcarBackendIndisponivel();
       }
     }
     const remotas = await this.listarHistoricoPorPedidoSupabase(orderId);
     return remotas;
+  }
+
+  private normalizarErroApi(error: unknown): PaymentApiError {
+    if (error instanceof HttpErrorResponse) {
+      const body = error.error;
+      const backendMessage = typeof body === 'string'
+        ? body
+        : body?.message || body?.detail || body?.error;
+      const message = typeof backendMessage === 'string' && backendMessage.trim()
+        ? backendMessage
+        : error.status === 0
+          ? 'Não foi possível conectar ao servidor de pagamentos.'
+          : `Falha HTTP ${error.status} ao comunicar com o servidor de pagamentos.`;
+      return new PaymentApiError(message, error.status);
+    }
+    return new PaymentApiError(
+      error instanceof Error ? error.message : 'Falha inesperada no servidor de pagamentos.',
+      0,
+    );
+  }
+
+  private propagateHttpError(error: unknown): void {
+    if (error instanceof HttpErrorResponse && [401, 403, 503].includes(error.status)) {
+      throw this.normalizarErroApi(error);
+    }
   }
 
   async listarHistoricoCliente(): Promise<PaymentView[]> {
@@ -166,7 +220,8 @@ export class PaymentService {
           this.http.get<PaymentView[]>(`${PAYMENT_API_BASE_URL}/history/customer`),
         );
         return remotas;
-      } catch {
+      } catch (error) {
+        this.propagateHttpError(error);
         this.marcarBackendIndisponivel();
       }
     }
@@ -183,7 +238,8 @@ export class PaymentService {
           this.http.get<PaymentView[]>(`${PAYMENT_API_BASE_URL}/history/artist`),
         );
         return remotas;
-      } catch {
+      } catch (error) {
+        this.propagateHttpError(error);
         this.marcarBackendIndisponivel();
       }
     }
