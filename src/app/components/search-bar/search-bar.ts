@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Output } from '@angular/core';
 import { AuthService } from '../../../services/auth.service';
 import { ModalService } from '../../../services/modal.service';
 import { PinService } from '../../../services/pinService';
@@ -14,7 +14,6 @@ import { Router } from '@angular/router';
   styleUrl: './search-bar.css',
 })
 export class SearchBar {
-  @Input() showSearchCard = false;
   @Output() pesquisaAlterada = new EventEmitter<string>();
 
   constructor(
@@ -26,6 +25,10 @@ export class SearchBar {
 
   get termoPesquisa(): string {
     return this.pinService.getTermoPesquisa();
+  }
+
+  get showSearchCard(): boolean {
+    return this.router.url.split(/[?#]/, 1)[0] === '/';
   }
 
   aoPesquisar(event: Event): void {
