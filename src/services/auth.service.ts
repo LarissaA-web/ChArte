@@ -218,8 +218,9 @@ export class AuthService {
       return { status: 'invalid_email' };
     }
     try {
+      const redirectTo = `${window.location.origin}/redefinir-senha`;
       const { error } = await supabase.auth.resetPasswordForEmail(emailNormalizado, {
-        redirectTo: `${window.location.origin}/redefinir-senha`,
+        redirectTo,
       });
       if (!error) return { status: 'sent' };
       if (error.status === 429 || CODE_RATE_LIMIT.includes(error.code ?? '')) {

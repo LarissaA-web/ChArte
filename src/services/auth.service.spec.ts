@@ -136,7 +136,7 @@ describe('AuthService login', () => {
     const service = new AuthService(); await service.aguardarInicializacao();
 
     expect(await service.solicitarRedefinicaoSenha(' ANA@EXAMPLE.COM ')).toEqual({ status: 'sent' });
-    expect(reset).toHaveBeenCalledWith('ana@example.com', { redirectTo: 'https://charte.example/redefinir-senha' });
+    expect(reset).toHaveBeenCalledWith('ana@example.com', { redirectTo: 'https://ch-arte.vercel.app/redefinir-senha' });
     expect(await service.solicitarRedefinicaoSenha('invalido')).toEqual({ status: 'invalid_email' });
   });
 
