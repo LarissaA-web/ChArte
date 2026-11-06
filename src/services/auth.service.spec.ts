@@ -3,7 +3,7 @@ import { supabase } from '../app/core/supabase/supabase.client';
 import { AuthService } from './auth.service';
 
 describe('AuthService login', () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
   function preparar(tipo: 'Cliente' | 'Artista' = 'Cliente', dataNascimento = '1990-01-01') {
     const auth = supabase.auth as any;
@@ -127,6 +127,51 @@ describe('AuthService login', () => {
     expect((await service.login('ana@example.com', 'senha', 'Artista')).status).toBe('account_type_mismatch');
     expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
     expect(service.getUsuarioLogado()).toBeNull();
+  });
+
+  it('envia pedido de recuperação com redirect para a rota do site sem revelar existência da conta', async () => {
+    const { auth } = preparar();
+    vi.stubGlobal('window', { location: { origin: 'https://charte.example' } });
+    const reset = vi.spyOn(auth, 'resetPasswordForEmail').mockResolvedValue({ data: {}, error: null } as any);
+    const service = new AuthService(); await service.aguardarInicializacao();
+
+    expect(await service.solicitarRedefinicaoSenha(' ANA@EXAMPLE.COM ')).toEqual({ status: 'sent' });
+    expect(reset).toHaveBeenCalledWith('ana@example.com', { redirectTo: 'https://charte.example/redefinir-senha' });
+    expect(await service.solicitarRedefinicaoSenha('invalido')).toEqual({ status: 'invalid_email' });
+  });
+
+  it('não aceita sessão comum como autorização de recuperação de senha', async () => {
+    const { auth } = preparar();
+    const updateUser = vi.spyOn(auth, 'updateUser');
+    auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: 'auth-5', email: 'ana@example.com' } } },
+      error: null,
+    } as any);
+    const service = new AuthService(); await service.aguardarInicializacao();
+
+    expect(await service.validarFluxoRecuperacaoSenha()).toBe(false);
+    expect((await service.concluirRecuperacaoSenha('senha-segura')).status).toBe('invalid_flow');
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('aceita somente evento PASSWORD_RECOVERY e encerra a sessão após alterar senha', async () => {
+    const { auth } = preparar();
+    const recoverySession = { user: { id: 'auth-5', email: 'ana@example.com' } };
+    auth.getSession.mockResolvedValue({ data: { session: recoverySession }, error: null } as any);
+    auth.onAuthStateChange.mockImplementation((callback: any) => {
+      callback('PASSWORD_RECOVERY', recoverySession);
+      return { data: { subscription: { unsubscribe: vi.fn() } } } as any;
+    });
+    const updateUser = vi.spyOn(auth, 'updateUser').mockResolvedValue({ data: { user: recoverySession.user }, error: null } as any);
+    const service = new AuthService(); await service.aguardarInicializacao();
+
+    expect(service.estaLogado()).toBe(false);
+    expect(await service.validarFluxoRecuperacaoSenha()).toBe(true);
+    expect((await service.concluirRecuperacaoSenha('senha-segura')).status).toBe('success');
+    expect(updateUser).toHaveBeenCalledWith({ password: 'senha-segura' });
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(service.estaLogado()).toBe(false);
+    expect(await service.validarFluxoRecuperacaoSenha()).toBe(false);
   });
 
   it('ignora SIGNED_IN atrasado da tentativa rejeitada após terminar o login', async () => {

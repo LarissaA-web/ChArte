@@ -19,6 +19,11 @@ export class ArtistLoginModal {
   mostrarSenha = false;
   mensagemErro = '';
   carregando = false;
+  modoRecuperacao = false;
+  emailRecuperacao = '';
+  mensagemRecuperacao = '';
+  erroRecuperacao = '';
+  enviandoRecuperacao = false;
 
   constructor(
     public modal: ModalService,
@@ -27,6 +32,7 @@ export class ArtistLoginModal {
   ) {}
 
   async entrar(): Promise<void> {
+    if (this.modoRecuperacao) return;
     if (this.carregando) return;
     const identificador = this.nomeUsuario.trim() || this.email.trim();
     if (!identificador || !this.senha) {
@@ -46,6 +52,41 @@ export class ArtistLoginModal {
       }
     } finally {
       this.carregando = false;
+    }
+  }
+
+  abrirRecuperacao(): void {
+    this.modoRecuperacao = true;
+    this.emailRecuperacao = this.email.trim();
+    this.mensagemRecuperacao = '';
+    this.erroRecuperacao = '';
+  }
+
+  voltarLogin(): void {
+    this.modoRecuperacao = false;
+    this.mensagemRecuperacao = '';
+    this.erroRecuperacao = '';
+  }
+
+  async solicitarRedefinicaoSenha(): Promise<void> {
+    if (this.enviandoRecuperacao || this.mensagemRecuperacao) return;
+    this.enviandoRecuperacao = true;
+    this.erroRecuperacao = '';
+    try {
+      const resultado = await this.authService.solicitarRedefinicaoSenha(this.emailRecuperacao);
+      if (resultado.status === 'invalid_email') {
+        this.erroRecuperacao = 'Informe um e-mail válido.';
+      } else if (resultado.status === 'sent') {
+        this.mensagemRecuperacao = 'Se houver uma conta associada a este e-mail, você receberá um link para redefinir sua senha.';
+      } else {
+        this.erroRecuperacao = resultado.status === 'rate_limited'
+          ? 'Muitas tentativas. Aguarde alguns minutos e tente novamente.'
+          : resultado.status === 'network_error'
+            ? 'Falha de conexão. Verifique sua internet e tente novamente.'
+            : 'Não foi possível solicitar a recuperação agora. Tente novamente.';
+      }
+    } finally {
+      this.enviandoRecuperacao = false;
     }
   }
 

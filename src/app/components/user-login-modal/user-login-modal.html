@@ -7,6 +7,7 @@
       <main>
         <button class="close-login" (click)="modal.closeModal()">×</button>
 
+        @if (!modoRecuperacao) {
         <form class="loginform" (submit)="$event.preventDefault(); entrar()">
           <input
             [(ngModel)]="email"
@@ -44,13 +45,23 @@
           }
 
           <div class="logar">
-            <a routerLink="/cadastro" (click)="modal.closeModal()">Esqueceu a senha?</a>
+            <a href="#" (click)="$event.preventDefault(); abrirRecuperacao()">Esqueci minha senha</a>
 
             <div class="buttonbox">
               <input type="submit" [value]="carregando ? 'Entrando...' : 'Logar'" id="login" [disabled]="carregando" />
             </div>
           </div>
         </form>
+        } @else {
+          <form class="loginform" (submit)="$event.preventDefault(); solicitarRedefinicaoSenha()">
+            <p>Informe o e-mail cadastrado para receber o link de redefinição de senha.</p>
+            <input [(ngModel)]="emailRecuperacao" type="email" name="emailRecuperacao" placeholder="E-mail" autocomplete="email" required />
+            @if (erroRecuperacao) { <p style="color: #ffb3ba; font-size: 12px; margin: 0; text-align: center;" role="alert">{{ erroRecuperacao }}</p> }
+            @if (mensagemRecuperacao) { <p style="color: #c7f5d1; font-size: 12px; margin: 0; text-align: center;" role="status">{{ mensagemRecuperacao }}</p> }
+            <div class="buttonbox"><input type="submit" value="Enviar link" id="login" [disabled]="enviandoRecuperacao || !!mensagemRecuperacao" /></div>
+            <a href="#" (click)="$event.preventDefault(); voltarLogin()">Voltar ao login</a>
+          </form>
+        }
 
 
         <button type="button" class="artist-link" (click)="abrirLoginArtista()">Sou artista</button>

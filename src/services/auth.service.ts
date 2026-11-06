@@ -80,6 +80,20 @@ export type ReenvioConfirmacao =
   | { status: 'network_error'; message: string }
   | { status: 'unknown_error'; message: string };
 
+export type PasswordResetRequestResult =
+  | { status: 'sent' }
+  | { status: 'invalid_email' }
+  | { status: 'rate_limited' }
+  | { status: 'network_error' }
+  | { status: 'error' };
+
+export type PasswordRecoveryResult =
+  | { status: 'success' }
+  | { status: 'invalid_flow' }
+  | { status: 'weak_password' }
+  | { status: 'network_error' }
+  | { status: 'error' };
+
 // Códigos de erro do Supabase Auth (AuthErrorCode) considerados aqui.
 const CODE_EMAIL_EXISTS = ['email_exists', 'user_already_registered', 'user_already_exists'];
 const CODE_RATE_LIMIT = [
@@ -88,6 +102,8 @@ const CODE_RATE_LIMIT = [
   'over_request_rate_limit',
 ];
 const SQLSTATE_UNIQUE_VIOLATION = '23505';
+const PASSWORD_RECOVERY_STORAGE_KEY = 'charte_password_recovery_uid';
+const PASSWORD_RECOVERY_CONSUMED_KEY = 'charte_password_recovery_consumed_uid';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -103,6 +119,7 @@ export class AuthService {
   private loginAttemptInProgress = false;
   /** Auth UID whose database profile was validated for this app session. */
   private authUidAutorizado: string | null = null;
+  private recoveryAuthUid: string | null = null;
 
   constructor() {
     this.inicializacaoPromise = this.inicializarSessao();
@@ -128,21 +145,17 @@ export class AuthService {
 
   private async inicializarSessao(): Promise<void> {
     try {
-      const { data, error } = await supabase.auth.getSession();
-
-      if (error) {
-        console.error('Erro ao recuperar a sessão:', error.message);
-      }
-
-      if (data.session?.user) {
-        this.emailUsuarioLogado = data.session.user.email ?? '';
-        await this.carregarPerfilESessao(data.session.user);
-      }
-
       if (!this.listenerRegistrado) {
         this.listenerRegistrado = true;
-
         supabase.auth.onAuthStateChange((evento, sessao) => {
+          if (evento === 'PASSWORD_RECOVERY' && sessao?.user) {
+            this.recoveryAuthUid = sessao.user.id;
+            this.salvarUidRecuperacao(sessao.user.id);
+            this.authUidAutorizado = null;
+            this.emailUsuarioLogado = '';
+            this.usuarioLogadoSubject.next(null);
+            return;
+          }
           // SIGNED_IN may be delivered after signInWithPassword resolves. Do
           // not let Auth's session alone publish an application login: only
           // process events for a UID whose database profile was validated.
@@ -175,6 +188,21 @@ export class AuthService {
           });
         });
       }
+
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error('Erro ao recuperar a sessão:', error.message);
+      }
+
+      if (data.session?.user) {
+        if (this.recuperacaoConsumida(data.session.user.id)) {
+          await supabase.auth.signOut({ scope: 'local' });
+        } else if (!(await this.sessaoDeRecuperacaoValida(data.session.user.id))) {
+          this.emailUsuarioLogado = data.session.user.email ?? '';
+          await this.carregarPerfilESessao(data.session.user);
+        }
+      }
     } catch (erro) {
       console.error('Erro ao inicializar autenticação:', erro);
     }
@@ -182,6 +210,102 @@ export class AuthService {
 
   async aguardarInicializacao(): Promise<void> {
     await this.inicializacaoPromise;
+  }
+
+  async solicitarRedefinicaoSenha(email: string): Promise<PasswordResetRequestResult> {
+    const emailNormalizado = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalizado)) {
+      return { status: 'invalid_email' };
+    }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(emailNormalizado, {
+        redirectTo: `${window.location.origin}/redefinir-senha`,
+      });
+      if (!error) return { status: 'sent' };
+      if (error.status === 429 || CODE_RATE_LIMIT.includes(error.code ?? '')) {
+        return { status: 'rate_limited' };
+      }
+      return this.ehFalhaDeConexao(error) ? { status: 'network_error' } : { status: 'error' };
+    } catch (error) {
+      return this.ehFalhaDeConexao(error) ? { status: 'network_error' } : { status: 'error' };
+    }
+  }
+
+  async validarFluxoRecuperacaoSenha(): Promise<boolean> {
+    await this.aguardarInicializacao();
+    const { data, error } = await supabase.auth.getSession();
+    const uid = data.session?.user.id;
+    if (error || !uid || this.recuperacaoConsumida(uid) || !(await this.sessaoDeRecuperacaoValida(uid))) return false;
+    return true;
+  }
+
+  async concluirRecuperacaoSenha(novaSenha: string): Promise<PasswordRecoveryResult> {
+    if (novaSenha.length < 6) return { status: 'weak_password' };
+    await this.aguardarInicializacao();
+    const { data, error: sessionError } = await supabase.auth.getSession();
+    const uid = data.session?.user.id;
+    if (sessionError || !uid || this.recuperacaoConsumida(uid) || !(await this.sessaoDeRecuperacaoValida(uid))) {
+      return { status: 'invalid_flow' };
+    }
+
+    this.loginAttemptInProgress = true;
+    let senhaAtualizada = false;
+    try {
+      const { error } = await supabase.auth.updateUser({ password: novaSenha });
+      if (error) {
+        if (error.code === 'weak_password') return { status: 'weak_password' };
+        return this.ehFalhaDeConexao(error) ? { status: 'network_error' } : { status: 'error' };
+      }
+      senhaAtualizada = true;
+      this.marcarRecuperacaoConsumida(uid);
+      try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* UID consumido continua bloqueado */ }
+      return { status: 'success' };
+    } catch (error) {
+      return this.ehFalhaDeConexao(error) ? { status: 'network_error' } : { status: 'error' };
+    } finally {
+      this.loginAttemptInProgress = false;
+      if (senhaAtualizada) this.limparEstadoRecuperacao(true);
+      this.authUidAutorizado = null;
+      this.emailUsuarioLogado = '';
+      this.usuarioLogadoSubject.next(null);
+    }
+  }
+
+  private async sessaoDeRecuperacaoValida(uid: string): Promise<boolean> {
+    if (this.recoveryAuthUid === uid) return true;
+    const storedUid = this.lerUidRecuperacao();
+    if (storedUid === uid) {
+      this.recoveryAuthUid = uid;
+      return true;
+    }
+    return false;
+  }
+
+  private salvarUidRecuperacao(uid: string): void {
+    try {
+      sessionStorage.removeItem(PASSWORD_RECOVERY_CONSUMED_KEY);
+      sessionStorage.setItem(PASSWORD_RECOVERY_STORAGE_KEY, uid);
+    } catch { /* armazenamento opcional */ }
+  }
+
+  private marcarRecuperacaoConsumida(uid: string): void {
+    try { sessionStorage.setItem(PASSWORD_RECOVERY_CONSUMED_KEY, uid); } catch { /* armazenamento opcional */ }
+  }
+
+  private recuperacaoConsumida(uid: string): boolean {
+    try { return sessionStorage.getItem(PASSWORD_RECOVERY_CONSUMED_KEY) === uid; } catch { return false; }
+  }
+
+  private lerUidRecuperacao(): string | null {
+    try { return sessionStorage.getItem(PASSWORD_RECOVERY_STORAGE_KEY); } catch { return null; }
+  }
+
+  private limparEstadoRecuperacao(manterConsumida = false): void {
+    this.recoveryAuthUid = null;
+    try {
+      sessionStorage.removeItem(PASSWORD_RECOVERY_STORAGE_KEY);
+      if (!manterConsumida) sessionStorage.removeItem(PASSWORD_RECOVERY_CONSUMED_KEY);
+    } catch { /* armazenamento opcional */ }
   }
 
   // --------------------------------------------------
@@ -818,6 +942,7 @@ export class AuthService {
         await this.restaurarSessaoAnterior(sessaoAnterior);
         return { status: 'service_error' };
       }
+      this.limparEstadoRecuperacao();
       return { status: 'success', sessao };
     } catch (error) {
       if (autenticadoNestaTentativa) await this.restaurarSessaoAnterior(sessaoAnterior);
@@ -877,6 +1002,8 @@ export class AuthService {
     }
 
     this.emailUsuarioLogado = '';
+    this.authUidAutorizado = null;
+    this.limparEstadoRecuperacao();
     this.usuarioLogadoSubject.next(null);
   }
 
@@ -887,6 +1014,8 @@ export class AuthService {
       // Sempre remove a sessão da aplicação neste dispositivo.
     } finally {
       this.emailUsuarioLogado = '';
+      this.authUidAutorizado = null;
+      this.limparEstadoRecuperacao();
       this.usuarioLogadoSubject.next(null);
     }
   }
