@@ -1,9 +1,15 @@
+
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://charte.onrender.com/api/:path*"
+    },
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]
 }
+
