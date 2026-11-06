@@ -1,5 +1,6 @@
 package br.com.charte.backend.payment;
 
+import br.com.charte.backend.common.MinimumAge;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -841,9 +842,10 @@ public class PaymentService {
         }
         try {
             return jdbcTemplate.queryForObject(
-                    "SELECT id_usuario FROM public.usuario WHERE CAST(id_auth AS VARCHAR) = ?",
+                    "SELECT id_usuario FROM public.usuario WHERE CAST(id_auth AS VARCHAR) = ? AND status_conta = 'Ativo' AND data_nascimento <= ?",
                     Long.class,
-                    authId
+                    authId,
+                    MinimumAge.latestEligibleBirthDate()
             );
         } catch (EmptyResultDataAccessException ex) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não vinculado");

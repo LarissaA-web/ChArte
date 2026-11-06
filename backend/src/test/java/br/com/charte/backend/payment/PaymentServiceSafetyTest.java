@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.charte.backend.testsupport.InMemoryCharteJdbcTemplate;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.concurrent.Executors;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +49,37 @@ class PaymentServiceSafetyTest {
         assertEquals(2L, jdbcTemplate.latestPayment().idArtista);
         assertEquals(new BigDecimal("150.00"), jdbcTemplate.latestPayment().valor);
         assertEquals(new BigDecimal("150.00"), first.amount());
+    }
+
+    @Test
+    void resolveUuidAuthParaIdUsuarioEAutorizaSomenteClienteDoPedido() {
+        String authId = "f33df301-8ec7-44ab-b85c-e643251edb73";
+        jdbcTemplate.addUser(8L, authId, "Morgana84", "Morgana", false);
+        jdbcTemplate.addUser(9L, "auth_artist_9", "artista9", "Artista Nove", true);
+        jdbcTemplate.addOrder(33L, 8L, 9L, new BigDecimal("150.00"), "Pendente", "Arte de teste local");
+
+        PaymentService.PaymentView checkout = service.checkout(
+                new PaymentService.CheckoutRequest(33L, "PIX"), authId);
+
+        assertEquals(33L, checkout.orderId());
+        assertEquals(8L, jdbcTemplate.latestPayment().idCliente);
+        assertEquals(1, service.listCustomerPayments(authId).size());
+    }
+
+    @Test
+    void bloqueiaNoBackendContaComMenosDeDezesseisAnos() {
+        String authId = "auth_underage";
+        jdbcTemplate.addUser(8L, authId, "menor", "Conta menor", false);
+        jdbcTemplate.setBirthDate(8L, LocalDate.now().minusYears(15));
+        jdbcTemplate.addUser(9L, "auth_artist_9", "artista9", "Artista Nove", true);
+        jdbcTemplate.addOrder(33L, 8L, 9L, new BigDecimal("150.00"), "Pendente", "Pedido local");
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.checkout(new PaymentService.CheckoutRequest(33L, "PIX"), authId));
+
+        assertEquals(403, error.getStatusCode().value());
+        assertEquals(0, jdbcTemplate.countPayments());
     }
 
     @Test

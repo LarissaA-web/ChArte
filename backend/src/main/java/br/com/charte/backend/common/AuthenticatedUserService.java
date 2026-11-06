@@ -36,7 +36,8 @@ public class AuthenticatedUserService {
                     """
                     SELECT id_usuario, nome_usuario, nome, foto_perfil, CAST(id_auth AS VARCHAR) AS id_auth
                     FROM public.usuario
-                    WHERE CAST(id_auth AS VARCHAR) = ?
+                    WHERE CAST(id_auth AS VARCHAR) = ? AND status_conta = 'Ativo'
+                      AND data_nascimento <= ?
                     """,
                     (rs, rowNum) -> new UserAccount(
                             rs.getLong("id_usuario"),
@@ -45,7 +46,8 @@ public class AuthenticatedUserService {
                             rs.getString("foto_perfil"),
                             rs.getString("id_auth")
                     ),
-                    authId
+                    authId,
+                    MinimumAge.latestEligibleBirthDate()
             );
         } catch (EmptyResultDataAccessException ex) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Conta de usuário não vinculada no sistema");
@@ -61,7 +63,8 @@ public class AuthenticatedUserService {
                     """
                     SELECT id_usuario, nome_usuario, nome, foto_perfil, CAST(id_auth AS VARCHAR) AS id_auth
                     FROM public.usuario
-                    WHERE CAST(id_auth AS VARCHAR) = ?
+                    WHERE CAST(id_auth AS VARCHAR) = ? AND status_conta = 'Ativo'
+                      AND data_nascimento <= ?
                     """,
                     (rs, rowNum) -> new UserAccount(
                             rs.getLong("id_usuario"),
@@ -70,7 +73,8 @@ public class AuthenticatedUserService {
                             rs.getString("foto_perfil"),
                             rs.getString("id_auth")
                     ),
-                    authId
+                    authId,
+                    MinimumAge.latestEligibleBirthDate()
             );
         } catch (EmptyResultDataAccessException ex) {
             return null;
@@ -86,7 +90,8 @@ public class AuthenticatedUserService {
                     """
                     SELECT id_usuario, nome_usuario, nome, foto_perfil, CAST(id_auth AS VARCHAR) AS id_auth
                     FROM public.usuario
-                    WHERE LOWER(nome_usuario) = LOWER(?)
+                    WHERE LOWER(nome_usuario) = LOWER(?) AND status_conta = 'Ativo'
+                      AND data_nascimento <= ?
                     """,
                     (rs, rowNum) -> new UserAccount(
                             rs.getLong("id_usuario"),
@@ -95,7 +100,8 @@ public class AuthenticatedUserService {
                             rs.getString("foto_perfil"),
                             rs.getString("id_auth")
                     ),
-                    username.trim().replaceFirst("^@", "")
+                    username.trim().replaceFirst("^@", ""),
+                    MinimumAge.latestEligibleBirthDate()
             );
         } catch (EmptyResultDataAccessException ex) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário não encontrado: " + username);

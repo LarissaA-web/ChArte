@@ -57,7 +57,7 @@
                 <div class="offer-actions">
                   <button type="button" class="secondary-action" (click)="abrirDetalhesComissao(comissao)">Ver detalhes</button>
                   @if (comissao.pagamentoStatus === 'pago') {
-                    <button type="button" class="primary-action" (click)="abrirEntrega(comissao, true)">Enviar comissão</button>
+                    <button type="button" class="primary-action" (click)="abrirEntrega(comissao)">Enviar comissão</button>
                   } @else {
                     <span class="status-hint">Aguardando pagamento do cliente</span>
                   }
@@ -66,7 +66,7 @@
               @if (secaoAtual === 'comissoes' && comissao.status === 'Em andamento') {
                 <div class="offer-actions">
                   <button type="button" class="secondary-action" (click)="abrirDetalhesComissao(comissao)">Ver detalhes</button>
-                  <button type="button" class="primary-action" (click)="abrirEntrega(comissao, true)">Enviar comissão</button>
+                  <button type="button" class="primary-action" (click)="abrirEntrega(comissao)">Enviar comissão</button>
                 </div>
               }
               @if (secaoAtual === 'comissoes' && comissao.status === 'Entregue') {
@@ -186,7 +186,7 @@
       <label>Confirmar nova senha<div class="password-field-control"><input required [type]="mostrarSenhaConfirmacao ? 'text' : 'password'" [(ngModel)]="senhaConfirmacao" name="senhaConfirmacao" /><button type="button" class="password-visibility" (click)="mostrarSenhaConfirmacao = !mostrarSenhaConfirmacao" [attr.aria-label]="mostrarSenhaConfirmacao ? 'Ocultar confirmação da senha' : 'Mostrar confirmação da senha'" [attr.aria-pressed]="mostrarSenhaConfirmacao"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>@if (!mostrarSenhaConfirmacao) { <path class="eye-slash" d="m4 4 16 16"/> }</svg></button></div></label>
       <button class="primary-action" type="submit">Atualizar senha</button></form>@if (mensagemSeguranca) { <p class="form-message">{{ mensagemSeguranca }}</p> }</div></section> }
 
-    @if (secaoAtual === 'seguranca') { <section class="area-section"><header class="section-heading"><div><h2>Apagar conta</h2><p>Esta ação encerra sua sessão e remove o perfil.</p></div></header><app-delete-account-card [nomeUsuario]="perfil.nomeUsuario" /></section> }
+    @if (secaoAtual === 'seguranca') { <section class="area-section"><header class="section-heading"><div><h2>Excluir conta</h2><p>Esta ação desativa sua conta e preserva registros necessários.</p></div></header><app-delete-account-card [nomeUsuario]="perfil.nomeUsuario" /></section> }
 </main>
 @if (editandoArte) {
   <div class="dialog-backdrop" role="presentation" (click)="editandoArte = null">
@@ -207,58 +207,54 @@
     </form>
   </div>
 }
-</div>
-
 <input
   #inputArquivosComissao
   type="file"
-  accept="image/*,.pdf,.zip,.psd,.ai,.svg"
-  multiple
+  accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
   style="display: none"
   (change)="selecionarArquivo($event)"
 />
 
 @if (entregaAtual) {
   @let repasseEntrega = repasseDaComissao(entregaAtual);
-  <div class="dialog-backdrop" role="presentation" (click)="entregaAtual = null">
+  <div class="dialog-backdrop" role="presentation" (click)="cancelarEntrega()">
     <section class="delivery-dialog" role="dialog" aria-modal="true" aria-labelledby="delivery-title" (click)="$event.stopPropagation()">
-      <button class="dialog-close" type="button" (click)="entregaAtual = null" aria-label="Fechar">×</button>
-      <h2 id="delivery-title">Enviar arquivos da comissão</h2>
-      <p>Entrega para {{ entregaAtual.cliente.nome }} (@{{ entregaAtual.cliente.username }}) · {{ entregaAtual.titulo }}</p>
+      <button class="dialog-close" type="button" (click)="cancelarEntrega()" [disabled]="enviandoEntrega" aria-label="Fechar">×</button>
+      <h2 id="delivery-title">Enviar comissão</h2>
+      <p><strong>Pedido #{{ entregaAtual.id }}</strong> · {{ entregaAtual.titulo }}</p>
+      <p>Cliente: {{ entregaAtual.cliente.nome }} (@{{ entregaAtual.cliente.username }})</p>
       <p style="font-size: 12px; color: #cbbdd2; margin-top: -6px;">
         Valor pago pelo cliente: <strong>{{ repasseEntrega.valorBruto | currency:'BRL' }}</strong> ·
         {{ repasseEntrega.temTaxa ? 'Taxa de 8%: -' + (repasseEntrega.valorTaxa | currency:'BRL') : 'Isento de taxa (≤ R$ 30,00)' }} ·
         Você recebe após aprovação do cliente: <strong>{{ repasseEntrega.valorLiquido | currency:'BRL' }}</strong>
       </p>
 
-      <button type="button" class="upload-box" (click)="acionarSeletorArquivosEntrega()">
-        {{ arquivosEntregaSelecionados.length || previewEntrega ? '+ Adicionar ou trocar arquivos da comissão' : 'Selecionar arquivos da comissão no dispositivo (até 10 MB)' }}
+      <button type="button" class="upload-box" (click)="acionarSeletorArquivosEntrega()" [disabled]="enviandoEntrega || sucessoEntrega">
+        {{ arquivoSelecionado ? 'Trocar imagem final' : 'Selecionar imagem final (PNG, JPG ou WEBP · até 10 MB)' }}
       </button>
+      @if (arquivoSelecionado) { <p>{{ arquivoSelecionado.name }}</p> }
 
-      @if (erroEntrega) { <p class="form-message">{{ erroEntrega }}</p> }
-      @if (previewEntrega && (previewEntrega.startsWith('data:image') || previewEntrega.startsWith('http') || previewEntrega.startsWith('/'))) {
-        <img class="art-preview" [src]="previewEntrega" alt="Prévia do arquivo da comissão" />
+      @if (erroEntrega) { <p class="form-message" role="alert">{{ erroEntrega }}</p> }
+      @if (sucessoEntrega) {
+        <p class="form-message" role="status">A imagem foi enviada e registrada. A comissão aguarda a avaliação do cliente.</p>
       }
-      @if (arquivosEntregaSelecionados.length) {
-        <div class="file-list" style="display: grid; gap: 6px; margin: 8px 0;">
-          @for (arq of arquivosEntregaSelecionados; track arq.nome + $index; let idx = $index) {
-            <div class="file-row">
-              <span>📎 {{ arq.nome }}</span>
-              <button type="button" (click)="removerArquivoEntrega(idx)">Remover</button>
-            </div>
-          }
-        </div>
-      }
+      @if (previewEntrega) { <img class="art-preview" [src]="previewEntrega" alt="Pré-visualização da imagem final" /> }
       <label>
-        Mensagem / Observação para o cliente
-        <textarea [(ngModel)]="observacaoEntrega" rows="3" placeholder="Descreva os arquivos enviados para o cliente revisar e clicar em Aprovar..."></textarea>
+        Mensagem opcional para o cliente
+        <textarea [(ngModel)]="observacaoEntrega" [disabled]="enviandoEntrega || sucessoEntrega" maxlength="2000" rows="3" placeholder="Adicione uma mensagem sobre a entrega..."></textarea>
       </label>
-      <button class="primary-action" type="button" [disabled]="(!previewEntrega && !arquivosEntregaSelecionados.length) || enviandoEntrega" (click)="enviarEntrega()">
-        {{ enviandoEntrega ? 'Enviando arquivos...' : 'Confirmar envio da comissão para o cliente' }}
-      </button>
+      <div class="offer-actions">
+        <button class="secondary-action" type="button" (click)="cancelarEntrega()" [disabled]="enviandoEntrega">{{ sucessoEntrega ? 'Fechar' : 'Cancelar' }}</button>
+        @if (!sucessoEntrega) {
+          <button class="primary-action" type="button" [disabled]="!arquivoSelecionado || enviandoEntrega" (click)="enviarEntrega()">
+            {{ enviandoEntrega ? 'Enviando imagem...' : 'Confirmar envio' }}
+          </button>
+        }
+      </div>
     </section>
   </div>
 }
+</div>
 
 <app-pin-card-modal></app-pin-card-modal>
 

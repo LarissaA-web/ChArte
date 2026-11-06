@@ -22,6 +22,7 @@ class FollowerServiceTest {
         InMemoryCharteJdbcTemplate jdbcTemplate = new InMemoryCharteJdbcTemplate();
         jdbcTemplate.addUser(1L, "auth_fan", "fan_arte", "Fã de Arte", false);
         jdbcTemplate.addUser(2L, "auth_artist", "artista_pro", "Artista Profissional", true);
+        jdbcTemplate.addUser(3L, "auth_other", "outro_usuario", "Outro Usuário", false);
 
         AuthenticatedUserService authUserService = new AuthenticatedUserService(jdbcTemplate);
         followerService = new FollowerService(jdbcTemplate, authUserService);
@@ -56,6 +57,15 @@ class FollowerServiceTest {
         ResponseStatusException ex = assertThrows(
                 ResponseStatusException.class,
                 () -> followerService.follow("artista_pro", "auth_artist")
+        );
+        assertEquals(400, ex.getStatusCode().value());
+    }
+
+    @Test
+    void devePermitirSeguirSomentePerfisDeArtista() {
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> followerService.follow("outro_usuario", "auth_fan")
         );
         assertEquals(400, ex.getStatusCode().value());
     }

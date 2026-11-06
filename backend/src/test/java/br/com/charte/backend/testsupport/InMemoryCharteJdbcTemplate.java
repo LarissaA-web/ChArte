@@ -27,6 +27,7 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
         public String nome;
         public String fotoPerfil;
         public String bio;
+        public LocalDate dataNascimento = LocalDate.of(1990, 1, 1);
 
         public UserRow(Long idUsuario, String idAuth, String nomeUsuario, String nome) {
             this.idUsuario = idUsuario;
@@ -110,6 +111,11 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
 
     public void associateArtistUser(Long artistId, Long userId) {
         artistUserIds.put(artistId, userId);
+    }
+
+    public void setBirthDate(Long userId, LocalDate birthDate) {
+        users.stream().filter(user -> user.idUsuario.equals(userId)).findFirst()
+                .orElseThrow().dataNascimento = birthDate;
     }
 
     public void addOrder(Long idPedido, Long idCliente, Long idArtista, BigDecimal valorTotal, String status, String titulo) {
@@ -267,6 +273,8 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
             String authId = (String) args[0];
             return users.stream()
                     .filter(u -> u.idAuth.equals(authId))
+                    .filter(u -> !normalized.contains("DATA_NASCIMENTO <= ?")
+                            || !u.dataNascimento.isAfter((LocalDate) args[1]))
                     .findFirst()
                     .map(u -> requiredType.cast(u.idUsuario))
                     .orElseThrow(() -> new EmptyResultDataAccessException(1));
@@ -291,6 +299,24 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
                     .filter(m -> m.idPagamento.equals(paymentId) && "credito_retido".equals(m.tipo))
                     .count();
             return requiredType.cast((int) count);
+        }
+
+        if (normalized.contains("SELECT COUNT(*) FROM PUBLIC.ARTISTA WHERE ID_USUARIO = ?")) {
+            Long userId = ((Number) args[0]).longValue();
+            long count = artistUserIds.values().stream().filter(userId::equals).count();
+            return requiredType.cast((int) count);
+        }
+
+        if (normalized.contains("SELECT COUNT(*) FROM PUBLIC.SEGUIDORES S JOIN PUBLIC.USUARIO U ON U.ID_USUARIO=S.ID_SEGUIDOR WHERE S.ID_SEGUINDO = ?")) {
+            Long targetId = ((Number) args[0]).longValue();
+            long count = follows.stream().filter(f -> f.idSeguindo.equals(targetId)).count();
+            return requiredType.cast(count);
+        }
+
+        if (normalized.contains("SELECT COUNT(*) FROM PUBLIC.SEGUIDORES S JOIN PUBLIC.USUARIO U ON U.ID_USUARIO=S.ID_SEGUINDO WHERE S.ID_SEGUIDOR = ?")) {
+            Long followerId = ((Number) args[0]).longValue();
+            long count = follows.stream().filter(f -> f.idSeguidor.equals(followerId)).count();
+            return requiredType.cast(count);
         }
 
         if (normalized.contains("SELECT COUNT(*) FROM PUBLIC.SEGUIDORES WHERE ID_SEGUINDO = ?")) {
@@ -352,7 +378,8 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
                 String authId = (String) args[0];
                 List<T> out = new ArrayList<>();
                 for (UserRow u : users) {
-                    if (u.idAuth.equals(authId)) {
+                    if (u.idAuth.equals(authId) && (!normalized.contains("DATA_NASCIMENTO <= ?")
+                            || !u.dataNascimento.isAfter((LocalDate) args[1]))) {
                         out.add(rowMapper.mapRow(mockResultSet(Map.of(
                                 "id_usuario", u.idUsuario,
                                 "nome_usuario", u.nomeUsuario,
@@ -369,7 +396,8 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
                 String username = (String) args[0];
                 List<T> out = new ArrayList<>();
                 for (UserRow u : users) {
-                    if (u.nomeUsuario.equalsIgnoreCase(username)) {
+                    if (u.nomeUsuario.equalsIgnoreCase(username) && (!normalized.contains("DATA_NASCIMENTO <= ?")
+                            || !u.dataNascimento.isAfter((LocalDate) args[1]))) {
                         out.add(rowMapper.mapRow(mockResultSet(Map.of(
                                 "id_usuario", u.idUsuario,
                                 "nome_usuario", u.nomeUsuario,

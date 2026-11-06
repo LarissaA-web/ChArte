@@ -175,7 +175,12 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
     private Object executeScalar(String norm, Object[] args) {
         if (norm.contains("SELECT ID_USUARIO FROM PUBLIC.USUARIO WHERE CAST(ID_AUTH AS VARCHAR) = ?")) {
             String authId = String.valueOf(args[0]);
-            List<Map<String, Object>> users = restGet("usuario", "select=id_usuario&id_auth=eq." + encode(authId) + "&limit=1");
+            String query = "select=id_usuario&id_auth=eq." + encode(authId);
+            if (requiresActiveAccount(norm)) {
+                query += "&status_conta=eq.Ativo";
+            }
+            query += minimumAgeFilter(norm, args);
+            List<Map<String, Object>> users = restGetRequired("usuario", query + "&limit=1");
             if (users.isEmpty()) {
                 return null;
             }
@@ -254,29 +259,36 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
         // 1. Consulta de usuário por id_auth
         if (norm.contains("FROM PUBLIC.USUARIO WHERE CAST(ID_AUTH AS VARCHAR) = ?")) {
             String authId = String.valueOf(args[0]);
-            return restGet("usuario", "select=id_usuario,nome_usuario,nome,foto_perfil,id_auth&id_auth=eq." + encode(authId) + "&limit=1");
+            String query = "select=id_usuario,nome_usuario,nome,foto_perfil,id_auth&id_auth=eq." + encode(authId);
+            if (requiresActiveAccount(norm)) {
+                query += "&status_conta=eq.Ativo";
+            }
+            query += minimumAgeFilter(norm, args);
+            return restGetRequired("usuario", query + "&limit=1");
         }
 
         // 2. Consulta de usuário por nome_usuario (com fallback para nome_artistico na tabela artista)
         if (norm.contains("FROM PUBLIC.USUARIO WHERE LOWER(NOME_USUARIO) = LOWER(?)")) {
             String username = String.valueOf(args[0]).trim().replaceFirst("^@", "");
-            List<Map<String, Object>> users = restGet(
+            String activeFilter = requiresActiveAccount(norm) ? "&status_conta=eq.Ativo" : "";
+            activeFilter += minimumAgeFilter(norm, args);
+            List<Map<String, Object>> users = restGetRequired(
                     "usuario",
-                    "select=id_usuario,nome_usuario,nome,foto_perfil,id_auth&nome_usuario=ilike." + encode(username) + "&limit=1"
+                    "select=id_usuario,nome_usuario,nome,foto_perfil,id_auth&nome_usuario=ilike." + encode(username) + activeFilter + "&limit=1"
             );
             if (!users.isEmpty()) {
                 return users;
             }
-            List<Map<String, Object>> artists = restGet(
+            List<Map<String, Object>> artists = restGetRequired(
                     "artista",
                     "select=id_usuario,nome_artistico&nome_artistico=ilike." + encode(username) + "&limit=1"
             );
             if (!artists.isEmpty()) {
                 Long idUsuario = toLong(artists.get(0).get("id_usuario"));
                 if (idUsuario != null) {
-                    return restGet(
+                    return restGetRequired(
                             "usuario",
-                            "select=id_usuario,nome_usuario,nome,foto_perfil,id_auth&id_usuario=eq." + idUsuario + "&limit=1"
+                            "select=id_usuario,nome_usuario,nome,foto_perfil,id_auth&id_usuario=eq." + idUsuario + activeFilter + "&limit=1"
                     );
                 }
             }
@@ -399,6 +411,45 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
         }
 
         return List.of();
+    }
+
+    private boolean requiresActiveAccount(String normalizedSql) {
+        return normalizedSql.contains("STATUS_CONTA = 'ATIVO'");
+    }
+
+    private String minimumAgeFilter(String normalizedSql, Object[] args) {
+        if (!normalizedSql.contains("DATA_NASCIMENTO <= ?")) {
+            return "";
+        }
+        return "&data_nascimento=lte." + encode(String.valueOf(args[1]));
+    }
+
+    private List<Map<String, Object>> restGetRequired(String table, String query) {
+        if (supabaseUrl.isBlank() || supabaseAnonKey.isBlank()) {
+            throw new DataAccessResourceFailureException(
+                    "A resolução de identidade no modo PostgREST exige SUPABASE_URL e SUPABASE_ANON_KEY configurados.");
+        }
+        try {
+            String uri = supabaseUrl + "/rest/v1/" + table + (query == null || query.isBlank() ? "" : "?" + query);
+            HttpRequest request = baseRequest(uri).GET().build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new DataAccessResourceFailureException(
+                        "A resolução de identidade no PostgREST falhou (HTTP " + response.statusCode() + ").");
+            }
+            if (response.body() == null || response.body().isBlank()) {
+                return Collections.emptyList();
+            }
+            return objectMapper.readValue(response.body(), new TypeReference<List<Map<String, Object>>>() {});
+        } catch (DataAccessResourceFailureException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new DataAccessResourceFailureException(
+                    "Falha ao consultar o vínculo de identidade no PostgREST.", ex);
+        }
     }
 
     private int executeUpdate(String norm, Object[] args) {

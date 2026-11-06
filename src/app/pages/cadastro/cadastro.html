@@ -135,16 +135,17 @@
             #dataNascimentoControl="ngModel"
             [attr.aria-invalid]="(dataNascimentoControl.invalid && (dataNascimentoControl.dirty || dataNascimentoControl.touched)) || campoInvalido('dataNascimento') ? 'true' : 'false'"
             aria-describedby="data-nascimento-hint data-nascimento-erro"
-            (change)="atualizarCorData()"
+            (click)="abrirCalendarioDataNascimento($event)"
+            (input)="atualizarDataNascimento($event)"
           />
-          <span id="data-nascimento-hint" class="signup-hint">Você deve ter pelo menos 13 anos.</span>
+          <span id="data-nascimento-hint" class="signup-hint">Você deve ter pelo menos 16 anos.</span>
           @if ((dataNascimentoControl.invalid && (dataNascimentoControl.dirty || dataNascimentoControl.touched)) || campoInvalido('dataNascimento')) {
             <span id="data-nascimento-erro" class="signup-field-error" role="alert">
               @if (campoInvalido('dataNascimento')) {
                 {{ erros['dataNascimento'] }}
               }
               @else if (dataNascimentoControl.errors?.['required']) { Informe sua data de nascimento. }
-              @else { Data inválida ou idade inferior a 13 anos. }
+              @else { Data inválida ou idade inferior a 16 anos. }
             </span>
           }
         </label>

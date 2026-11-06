@@ -1,12 +1,12 @@
 <section class="delete-card" aria-labelledby="delete-account-title">
   <span class="warning-icon" aria-hidden="true">!</span>
   <div class="delete-copy">
-    <h3 id="delete-account-title">Apagar conta</h3>
-    <p>A exclusão remove seu perfil e encerra sua sessão. Esta ação não pode ser desfeita.</p>
+    <h3 id="delete-account-title">Excluir conta</h3>
+    <p>Sua conta será desativada e os dados pessoais serão anonimizados. Pedidos, pagamentos e movimentações serão preservados.</p>
     <label>Digite <strong>{{ nomeUsuario }}</strong> para confirmar
       <input type="text" [(ngModel)]="confirmacao" [placeholder]="nomeUsuario" autocomplete="off" />
     </label>
     @if (erro) { <p class="delete-error" role="alert">{{ erro }}</p> }
-    <button type="button" class="delete-button" [disabled]="!podeExcluir" (click)="excluirConta()">Apagar minha conta</button>
+    <button type="button" class="delete-button" [disabled]="!podeExcluir || excluindo" (click)="excluirConta()">{{ excluindo ? 'Desativando...' : 'Excluir minha conta' }}</button>
   </div>
 </section>

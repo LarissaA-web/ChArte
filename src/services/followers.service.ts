@@ -21,14 +21,6 @@ export interface FollowerProfile {
   isArtist: boolean;
 }
 
-interface LocalFollowEntry {
-  idSeguidor: number;
-  idSeguindo: number;
-  createdAt: string;
-}
-
-const CHAVE_SEGUIDORES_LOCAL = 'charte_seguidores_store_v1';
-
 @Injectable({
   providedIn: 'root',
 })
@@ -62,54 +54,6 @@ export class FollowersService {
     }
   }
 
-  private lerSeguidoresLocais(): LocalFollowEntry[] {
-    if (typeof localStorage === 'undefined') return [];
-    try {
-      const raw = localStorage.getItem(CHAVE_SEGUIDORES_LOCAL);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-
-  private salvarSeguidoresLocais(entries: LocalFollowEntry[]): void {
-    if (typeof localStorage === 'undefined') return;
-    try {
-      localStorage.setItem(CHAVE_SEGUIDORES_LOCAL, JSON.stringify(entries));
-    } catch {
-      // ignora erro de quota
-    }
-  }
-
-  private adicionarSeguidorLocal(idSeguidor: number, idSeguindo: number): void {
-    const lista = this.lerSeguidoresLocais();
-    const existe = lista.some(
-      (item) => Number(item.idSeguidor) === idSeguidor && Number(item.idSeguindo) === idSeguindo,
-    );
-    if (!existe) {
-      lista.unshift({
-        idSeguidor,
-        idSeguindo,
-        createdAt: new Date().toISOString(),
-      });
-      this.salvarSeguidoresLocais(lista);
-    }
-  }
-
-  private removerSeguidorLocal(idSeguidor: number, idSeguindo: number): void {
-    const lista = this.lerSeguidoresLocais().filter(
-      (item) => !(Number(item.idSeguidor) === idSeguidor && Number(item.idSeguindo) === idSeguindo),
-    );
-    this.salvarSeguidoresLocais(lista);
-  }
-
-  private verificarRelacaoLocal(idSeguidor: number, idSeguindo: number): boolean {
-    return this.lerSeguidoresLocais().some(
-      (item) => Number(item.idSeguidor) === idSeguidor && Number(item.idSeguindo) === idSeguindo,
-    );
-  }
-
   getSnapshot(username: string): FollowSummary | null {
     if (!username) return null;
     const key = username.trim().replace(/^@/, '').toLowerCase();
@@ -128,9 +72,8 @@ export class FollowersService {
           this.http.get<FollowSummary>(`${this.baseUrl}/${encodeURIComponent(cleanUsername)}/summary`),
         );
         if (summary) {
-          const enriquecido = await this.mesclarResumoComLocal(summary);
-          this.emitSummary(enriquecido, cleanUsername);
-          return enriquecido;
+          this.emitSummary(summary, cleanUsername);
+          return summary;
         }
       } catch (error) {
         this.propagarErroBackend(error);
@@ -167,22 +110,18 @@ export class FollowersService {
       throw new Error('Você não pode seguir a si mesmo.');
     }
 
-    this.adicionarSeguidorLocal(idSeguidor, idSeguindo);
-
     if (this.deveTentarBackend()) {
       try {
         const summary = await firstValueFrom(
           this.http.post<FollowSummary>(`${this.baseUrl}/${encodeURIComponent(target.nome_usuario)}`, {}),
         );
         if (summary) {
-          const enriquecido = await this.mesclarResumoComLocal(summary);
-          this.emitSummary(enriquecido, cleanUsername);
-          return enriquecido;
+          this.emitSummary(summary, cleanUsername);
+          return summary;
         }
       } catch (err: any) {
         const status = Number(err?.status || 0);
         if ([400, 401, 403, 503].includes(status)) {
-          this.removerSeguidorLocal(idSeguidor, idSeguindo);
           this.propagarErroBackend(err);
           throw new Error(err?.error?.message || 'Não foi possível seguir este perfil.');
         }
@@ -190,16 +129,12 @@ export class FollowersService {
       }
     }
 
-    const jaSegue = await this.verificarRelacaoSupabase(idSeguidor, idSeguindo);
-    if (!jaSegue) {
-      try {
-        await supabase.from('seguidores').insert({
-          id_seguidor: idSeguidor,
-          id_seguindo: idSeguindo,
-        });
-      } catch {
-        // Persistido localmente quando a tabela pública seguidores não está exposta no schema cache
-      }
+    const { error } = await supabase.from('seguidores').insert({
+      id_seguidor: idSeguidor,
+      id_seguindo: idSeguindo,
+    });
+    if (error && error.code !== '23505') {
+      throw new Error('Não foi possível salvar o relacionamento de seguidores. Verifique sua conexão e autorização.');
     }
 
     const summary = await this.obterResumoSupabase(cleanUsername);
@@ -223,36 +158,27 @@ export class FollowersService {
     const idSeguidor = Number(currentUser.idUsuario);
     const idSeguindo = Number(target.id_usuario);
 
-    this.removerSeguidorLocal(idSeguidor, idSeguindo);
-
     if (this.deveTentarBackend()) {
       try {
         const summary = await firstValueFrom(
           this.http.delete<FollowSummary>(`${this.baseUrl}/${encodeURIComponent(target.nome_usuario)}`),
         );
         if (summary) {
-          const enriquecido = await this.mesclarResumoComLocal(summary);
-          this.emitSummary(enriquecido, cleanUsername);
-          return enriquecido;
+          this.emitSummary(summary, cleanUsername);
+          return summary;
         }
       } catch (error: any) {
-        if ([401, 403, 503].includes(Number(error?.status || 0))) {
-          this.adicionarSeguidorLocal(idSeguidor, idSeguindo);
-        }
         this.propagarErroBackend(error);
         this.marcarBackendIndisponivel();
       }
     }
 
-    try {
-      await supabase
+    const { error: erroRemocao } = await supabase
         .from('seguidores')
         .delete()
         .eq('id_seguidor', idSeguidor)
         .eq('id_seguindo', idSeguindo);
-    } catch {
-      // Removido localmente
-    }
+    if (erroRemocao) throw new Error('Não foi possível deixar de seguir. Verifique sua conexão e autorização.');
 
     const summary = await this.obterResumoSupabase(cleanUsername);
     this.emitSummary(summary, cleanUsername);
@@ -290,10 +216,6 @@ export class FollowersService {
 
     const target = await this.buscarUsuarioPorUsername(cleanUsername);
     const targetId = Number(target.id_usuario);
-    const locaisIds = this.lerSeguidoresLocais()
-      .filter((item) => Number(item.idSeguindo) === targetId)
-      .map((item) => Number(item.idSeguidor));
-
     let supabaseIds: number[] = [];
     try {
       const { data: relacoes, error } = await supabase
@@ -312,7 +234,6 @@ export class FollowersService {
       new Set([
         ...remotos.map((r) => Number(r.userId)),
         ...supabaseIds,
-        ...locaisIds,
       ]),
     ).filter((id) => Number.isFinite(id) && id > 0);
 
@@ -348,10 +269,6 @@ export class FollowersService {
 
     const target = await this.buscarUsuarioPorUsername(cleanUsername);
     const targetId = Number(target.id_usuario);
-    const locaisIds = this.lerSeguidoresLocais()
-      .filter((item) => Number(item.idSeguidor) === targetId)
-      .map((item) => Number(item.idSeguindo));
-
     let supabaseIds: number[] = [];
     try {
       const { data: relacoes, error } = await supabase
@@ -370,31 +287,11 @@ export class FollowersService {
       new Set([
         ...remotos.map((r) => Number(r.userId)),
         ...supabaseIds,
-        ...locaisIds,
       ]),
     ).filter((id) => Number.isFinite(id) && id > 0);
 
     if (!idsCombinados.length) return remotos;
     return this.buscarPerfisPorIds(idsCombinados);
-  }
-
-  private async mesclarResumoComLocal(summary: FollowSummary): Promise<FollowSummary> {
-    const currentUser = this.authService.getUsuarioLogado();
-    const targetId = Number(summary.targetUserId);
-    const locais = this.lerSeguidoresLocais();
-
-    const seguidoresLocais = locais.filter((r) => Number(r.idSeguindo) === targetId).length;
-    const seguindoLocais = locais.filter((r) => Number(r.idSeguidor) === targetId).length;
-    const segueLocalmente = currentUser?.idUsuario
-      ? this.verificarRelacaoLocal(Number(currentUser.idUsuario), targetId)
-      : false;
-
-    return {
-      ...summary,
-      followersCount: Math.max(Number(summary.followersCount || 0), seguidoresLocais),
-      followingCount: Math.max(Number(summary.followingCount || 0), seguindoLocais),
-      isFollowing: Boolean(summary.isFollowing || segueLocalmente),
-    };
   }
 
   private async obterResumoSupabase(username: string): Promise<FollowSummary> {
@@ -405,30 +302,25 @@ export class FollowersService {
     let remoteFollowersIds: number[] = [];
     let remoteFollowingIds: number[] = [];
     try {
-      const [{ data: followersData }, { data: followingData }] = await Promise.all([
+      const [{ data: followersData, error: followersError }, { data: followingData, error: followingError }] = await Promise.all([
         supabase.from('seguidores').select('id_seguidor').eq('id_seguindo', targetId),
         supabase.from('seguidores').select('id_seguindo').eq('id_seguidor', targetId),
       ]);
+      if (followersError || followingError) {
+        throw new Error('Não foi possível carregar os relacionamentos de seguidores.');
+      }
       if (Array.isArray(followersData)) {
         remoteFollowersIds = followersData.map((r: any) => Number(r.id_seguidor));
       }
       if (Array.isArray(followingData)) {
         remoteFollowingIds = followingData.map((r: any) => Number(r.id_seguindo));
       }
-    } catch {
-      // ignora erro se tabela seguidores não existir no schema cache
+    } catch (error) {
+      throw error instanceof Error ? error : new Error('Não foi possível carregar os relacionamentos de seguidores.');
     }
 
-    const locais = this.lerSeguidoresLocais();
-    const localFollowersIds = locais
-      .filter((r) => Number(r.idSeguindo) === targetId)
-      .map((r) => Number(r.idSeguidor));
-    const localFollowingIds = locais
-      .filter((r) => Number(r.idSeguidor) === targetId)
-      .map((r) => Number(r.idSeguindo));
-
-    const followersSet = new Set([...remoteFollowersIds, ...localFollowersIds]);
-    const followingSet = new Set([...remoteFollowingIds, ...localFollowingIds]);
+    const followersSet = new Set(remoteFollowersIds);
+    const followingSet = new Set(remoteFollowingIds);
 
     const currentUserId = Number(currentUser?.idUsuario || 0);
     const isFollowing = currentUserId > 0 ? followersSet.has(currentUserId) : false;
@@ -440,22 +332,6 @@ export class FollowersService {
       followingCount: followingSet.size,
       isFollowing,
     };
-  }
-
-  private async verificarRelacaoSupabase(idSeguidor: number, idSeguindo: number): Promise<boolean> {
-    try {
-      const { data, error } = await supabase
-        .from('seguidores')
-        .select('id')
-        .eq('id_seguidor', idSeguidor)
-        .eq('id_seguindo', idSeguindo)
-        .limit(1);
-
-      if (error) return false;
-      return Array.isArray(data) && data.length > 0;
-    } catch {
-      return false;
-    }
   }
 
   private async buscarUsuarioPorUsername(

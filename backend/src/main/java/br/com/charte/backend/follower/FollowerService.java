@@ -49,6 +49,10 @@ public class FollowerService {
         UserAccount follower = authenticatedUserService.requireUserByAuthId(currentAuthId);
         UserAccount target = authenticatedUserService.requireUserByUsername(targetUsername);
 
+        if (!isArtist(target.idUsuario())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Só é possível seguir perfis de artistas");
+        }
+
         if (follower.idUsuario().equals(target.idUsuario())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Um usuário não pode seguir a si mesmo");
         }
@@ -93,7 +97,7 @@ public class FollowerService {
                 FROM public.seguidores s
                 JOIN public.usuario u ON u.id_usuario = s.id_seguidor
                 LEFT JOIN public.artista a ON a.id_usuario = u.id_usuario
-                WHERE s.id_seguindo = ?
+                WHERE s.id_seguindo = ? AND u.status_conta = 'Ativo'
                 ORDER BY s.id DESC
                 """,
                 (rs, rowNum) -> new FollowerProfileView(
@@ -117,7 +121,7 @@ public class FollowerService {
                 FROM public.seguidores s
                 JOIN public.usuario u ON u.id_usuario = s.id_seguindo
                 LEFT JOIN public.artista a ON a.id_usuario = u.id_usuario
-                WHERE s.id_seguidor = ?
+                WHERE s.id_seguidor = ? AND u.status_conta = 'Ativo'
                 ORDER BY s.id DESC
                 """,
                 (rs, rowNum) -> new FollowerProfileView(
@@ -143,12 +147,12 @@ public class FollowerService {
 
     private FollowSummaryView buildSummary(UserAccount target, Long currentUserId) {
         Long followers = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM public.seguidores WHERE id_seguindo = ?",
+                "SELECT COUNT(*) FROM public.seguidores s JOIN public.usuario u ON u.id_usuario=s.id_seguidor WHERE s.id_seguindo = ? AND u.status_conta='Ativo'",
                 Long.class,
                 target.idUsuario()
         );
         Long following = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM public.seguidores WHERE id_seguidor = ?",
+                "SELECT COUNT(*) FROM public.seguidores s JOIN public.usuario u ON u.id_usuario=s.id_seguindo WHERE s.id_seguidor = ? AND u.status_conta='Ativo'",
                 Long.class,
                 target.idUsuario()
         );
@@ -168,6 +172,15 @@ public class FollowerService {
                 Integer.class,
                 followerId,
                 targetId
+        );
+        return count != null && count > 0;
+    }
+
+    private boolean isArtist(Long userId) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.artista WHERE id_usuario = ?",
+                Integer.class,
+                userId
         );
         return count != null && count > 0;
     }

@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { TipoUsuario } from '../app/mocks/usuarios.mock';
 import { supabase } from '../app/core/supabase/supabase.client';
+import { hasMinimumAge } from './age-validation';
 
 export interface SessaoUsuario {
   idUsuario: string;
@@ -12,6 +13,17 @@ export interface SessaoUsuario {
   nomeArtistico?: string;
   fotoPerfil: string;
 }
+
+export type LoginResult =
+  | { status: 'success'; sessao: SessaoUsuario }
+  | { status: 'invalid_credentials' }
+  | { status: 'email_not_confirmed' }
+  | { status: 'account_not_found' }
+  | { status: 'account_disabled' }
+  | { status: 'age_restricted' }
+  | { status: 'account_type_mismatch'; tipoReal: TipoUsuario }
+  | { status: 'connection_error' }
+  | { status: 'service_error' };
 
 interface DadosCadastro {
   nome: string;
@@ -32,6 +44,8 @@ interface UsuarioBanco {
   nome: string;
   tipo_usuario: string;
   foto_perfil: string | null;
+  status_conta?: string;
+  data_nascimento?: string | null;
 }
 
 /**
@@ -86,6 +100,7 @@ export class AuthService {
   private inicializacaoPromise: Promise<void>;
   private emailUsuarioLogado = '';
   private listenerRegistrado = false;
+  private loginAttemptInProgress = false;
 
   constructor() {
     this.inicializacaoPromise = this.inicializarSessao();
@@ -99,10 +114,10 @@ export class AuthService {
     return tipo === 'Comum' ? 'Cliente' : tipo;
   }
 
-  private converterTipoParaFrontend(tipoBanco: string): TipoUsuario {
-    return tipoBanco === 'Cliente'
-      ? 'Comum'
-      : (tipoBanco as TipoUsuario);
+  private converterTipoParaFrontend(tipoBanco: string): TipoUsuario | null {
+    if (tipoBanco === 'Cliente' || tipoBanco === 'Comum') return 'Comum';
+    if (tipoBanco === 'Artista') return 'Artista';
+    return null;
   }
 
   // --------------------------------------------------
@@ -126,6 +141,7 @@ export class AuthService {
         this.listenerRegistrado = true;
 
         supabase.auth.onAuthStateChange((evento, sessao) => {
+          if (this.loginAttemptInProgress) return;
           // Evita aguardar consultas ao banco dentro do callback
           // de autenticação do Supabase.
           Promise.resolve().then(async () => {
@@ -165,7 +181,7 @@ export class AuthService {
       const { data: usuarioDb, error } = await supabase
         .from('usuario')
         .select(
-          'id_usuario, id_auth, nome_usuario, nome, tipo_usuario, foto_perfil',
+          'id_usuario, id_auth, nome_usuario, nome, tipo_usuario, foto_perfil, status_conta, data_nascimento',
         )
         .eq('id_auth', user.id)
         .maybeSingle();
@@ -186,9 +202,25 @@ export class AuthService {
       }
 
       const usuario = usuarioDb as UsuarioBanco;
+      if (usuario.status_conta && usuario.status_conta.toLowerCase() !== 'ativo') {
+        this.emailUsuarioLogado = '';
+        this.usuarioLogadoSubject.next(null);
+        void supabase.auth.signOut({ scope: 'local' });
+        return;
+      }
+      if (!hasMinimumAge(usuario.data_nascimento, 16)) {
+        this.emailUsuarioLogado = '';
+        this.usuarioLogadoSubject.next(null);
+        void supabase.auth.signOut({ scope: 'local' });
+        return;
+      }
       const tipoFrontend = this.converterTipoParaFrontend(
         usuario.tipo_usuario,
       );
+      if (!tipoFrontend) {
+        this.usuarioLogadoSubject.next(null);
+        return;
+      }
 
       let nomeArtistico: string | undefined;
 
@@ -309,13 +341,7 @@ export class AuthService {
       return { status: 'invalid_input', message: 'Gênero inválido.' };
     }
 
-    const nascimento = new Date(`${dados.dataNascimento}T00:00:00`);
-    const hoje = new Date();
-
-    if (
-      !Number.isFinite(nascimento.getTime()) ||
-      nascimento > hoje
-    ) {
+    if (!hasMinimumAge(dados.dataNascimento, 0)) {
       return {
         status: 'invalid_input',
         field: 'dataNascimento',
@@ -323,21 +349,11 @@ export class AuthService {
       };
     }
 
-    let idade = hoje.getFullYear() - nascimento.getFullYear();
-
-    if (
-      hoje.getMonth() < nascimento.getMonth() ||
-      (hoje.getMonth() === nascimento.getMonth() &&
-        hoje.getDate() < nascimento.getDate())
-    ) {
-      idade--;
-    }
-
-    if (idade < 13) {
+    if (!hasMinimumAge(dados.dataNascimento, 16)) {
       return {
         status: 'invalid_input',
         field: 'dataNascimento',
-        message: 'É necessário ter pelo menos 13 anos.',
+        message: 'É necessário ter pelo menos 16 anos.',
       };
     }
 
@@ -700,82 +716,128 @@ export class AuthService {
   async login(
     identificador: string,
     senha: string,
-    tipoEsperado?: TipoUsuario,
-  ): Promise<boolean> {
+    tipoEsperado: TipoUsuario,
+  ): Promise<LoginResult> {
+    const informado = identificador.trim().replace(/^@/, '');
+    if (!informado || !senha) return { status: 'invalid_credentials' };
+
+    const pareceEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(informado);
+    if (informado.includes('@') && !pareceEmail) return { status: 'invalid_credentials' };
+
+    let email = pareceEmail ? informado.toLowerCase() : '';
+    let sessaoAnterior: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'] = null;
+    let autenticadoNestaTentativa = false;
     try {
       await this.aguardarInicializacao();
-
-      const ident = identificador.trim();
-      let email = ident;
-
-      if (!ident) {
-        console.error('Informe seu e-mail ou nome de usuário.');
-        return false;
-      }
-
-      if (!ident.includes('@')) {
-        const { data, error } = await supabase.rpc(
-          'get_email_by_username',
-          { p_nome_usuario: ident },
-        );
-
-        if (error || !data) {
-          console.error(
-            'Não foi possível localizar o usuário:',
-            error?.message,
-          );
-          return false;
-        }
-
-        email = data as string;
-      }
-
-      const { data, error } =
-        await supabase.auth.signInWithPassword({
-          email,
-          password: senha,
+      if (!pareceEmail) {
+        const { data, error } = await supabase.rpc('get_email_by_username', {
+          p_nome_usuario: informado,
         });
-
-      if (error || !data.user || !data.session) {
-        console.error(
-          'Falha no login:',
-          error?.message ?? 'Sessão não criada.',
-        );
-        return false;
+        if (error) {
+          return this.ehFalhaDeConexao(error) ? { status: 'connection_error' } : { status: 'service_error' };
+        }
+        if (typeof data !== 'string' || !data.trim()) return { status: 'account_not_found' };
+        email = data.trim().toLowerCase();
       }
+      const anterior = await supabase.auth.getSession();
+      sessaoAnterior = anterior.data.session;
+      this.loginAttemptInProgress = true;
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+      if (error) {
+        if (error && /email_not_confirmed/i.test(`${error.code ?? ''} ${error.message}`)) {
+          return { status: 'email_not_confirmed' };
+        }
+        return error && this.ehFalhaDeConexao(error)
+          ? { status: 'connection_error' }
+          : { status: 'invalid_credentials' };
+      }
+      if (!data.user || !data.session) {
+        await this.restaurarSessaoAnterior(sessaoAnterior);
+        return { status: 'service_error' };
+      }
+      autenticadoNestaTentativa = true;
 
       const { data: usuarioDb, error: perfilErro } = await supabase
         .from('usuario')
-        .select('tipo_usuario')
+        .select('tipo_usuario, status_conta, data_nascimento')
         .eq('id_auth', data.user.id)
         .maybeSingle();
 
       if (perfilErro || !usuarioDb) {
-        console.error(
-          'Conta autenticada sem perfil válido:',
-          perfilErro?.message,
-        );
-        await supabase.auth.signOut();
-        return false;
+        await this.restaurarSessaoAnterior(sessaoAnterior);
+        return perfilErro && this.ehFalhaDeConexao(perfilErro)
+          ? { status: 'connection_error' }
+          : { status: 'service_error' };
       }
 
-      const tipoReal = this.converterTipoParaFrontend(
-        usuarioDb.tipo_usuario,
-      );
+      if (usuarioDb.status_conta && String(usuarioDb.status_conta).toLowerCase() !== 'ativo') {
+        await this.restaurarSessaoAnterior(sessaoAnterior);
+        return { status: 'account_disabled' };
+      }
+      if (!hasMinimumAge(usuarioDb.data_nascimento, 16)) {
+        await this.restaurarSessaoAnterior(sessaoAnterior);
+        return { status: 'age_restricted' };
+      }
 
-      if (tipoEsperado && tipoReal !== tipoEsperado) {
-        console.error('O tipo de conta não corresponde ao login.');
-        await supabase.auth.signOut();
-        return false;
+      const tipoReal = this.converterTipoParaFrontend(usuarioDb.tipo_usuario);
+      if (!tipoReal) {
+        await this.restaurarSessaoAnterior(sessaoAnterior);
+        return { status: 'service_error' };
+      }
+      if (tipoReal !== tipoEsperado) {
+        await this.restaurarSessaoAnterior(sessaoAnterior);
+        return { status: 'account_type_mismatch', tipoReal };
       }
 
       this.emailUsuarioLogado = data.user.email ?? email;
       await this.carregarPerfilESessao(data.user);
+      const sessao = this.usuarioLogadoSubject.value;
+      if (!sessao || sessao.tipoUsuario !== tipoEsperado) {
+        await this.restaurarSessaoAnterior(sessaoAnterior);
+        return { status: 'service_error' };
+      }
+      return { status: 'success', sessao };
+    } catch (error) {
+      if (autenticadoNestaTentativa) await this.restaurarSessaoAnterior(sessaoAnterior);
+      return this.ehFalhaDeConexao(error)
+        ? { status: 'connection_error' }
+        : { status: 'service_error' };
+    } finally {
+      this.loginAttemptInProgress = false;
+    }
+  }
 
-      return this.usuarioLogadoSubject.value !== null;
-    } catch (erro) {
-      console.error('Erro inesperado no login:', erro);
-      return false;
+  private ehFalhaDeConexao(error: unknown): boolean {
+    const detail = error instanceof Error
+      ? `${error.name} ${error.message}`
+      : error && typeof error === 'object'
+        ? `${(error as any).name ?? ''} ${(error as any).message ?? ''} ${(error as any).code ?? ''}`
+        : String(error ?? '');
+    return /fetch|network|timeout|connection|failed to fetch/i.test(detail);
+  }
+
+  private async restaurarSessaoAnterior(
+    sessaoAnterior: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'],
+  ): Promise<void> {
+    try {
+      if (sessaoAnterior?.access_token && sessaoAnterior.refresh_token) {
+        const { data, error } = await supabase.auth.setSession({
+          access_token: sessaoAnterior.access_token,
+          refresh_token: sessaoAnterior.refresh_token,
+        });
+        if (!error && data.session?.user) {
+          this.emailUsuarioLogado = data.session.user.email ?? '';
+          await this.carregarPerfilESessao(data.session.user);
+          return;
+        }
+      }
+      await supabase.auth.signOut({ scope: 'local' });
+      this.emailUsuarioLogado = '';
+      this.usuarioLogadoSubject.next(null);
+    } catch {
+      this.emailUsuarioLogado = '';
+      this.usuarioLogadoSubject.next(null);
     }
   }
 
@@ -793,6 +855,17 @@ export class AuthService {
 
     this.emailUsuarioLogado = '';
     this.usuarioLogadoSubject.next(null);
+  }
+
+  async logoutLocal(): Promise<void> {
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      // Sempre remove a sessão da aplicação neste dispositivo.
+    } finally {
+      this.emailUsuarioLogado = '';
+      this.usuarioLogadoSubject.next(null);
+    }
   }
 
   getUsuarioLogado(): SessaoUsuario | null {
@@ -911,28 +984,5 @@ export class AuthService {
     return true;
   }
 
-  // --------------------------------------------------
-  // Exclusão de conta
-  // --------------------------------------------------
-
-  /**
-   * Este método encerra a sessão, mas não exclui o usuário
-   * de auth.users nem os registros do banco.
-   *
-   * A exclusão definitiva deve ser implementada no servidor,
-   * por exemplo, com uma Supabase Edge Function autenticada
-   * que valide o usuário e utilize a chave service_role.
-   */
-  async excluirContaLogada(): Promise<boolean> {
-    if (!this.usuarioLogadoSubject.value) return false;
-
-    try {
-      await this.logout();
-      return true;
-    } catch (erro) {
-      console.error('Não foi possível encerrar a sessão:', erro);
-      return false;
-    }
-  }
 }
 
