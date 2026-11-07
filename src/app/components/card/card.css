@@ -31,6 +31,24 @@
   border: 1px solid rgba(255,255,255,.12);
   border-radius: 50%;
   box-shadow: 0 0 0 12px rgba(255,255,255,.025), 0 0 0 25px rgba(255,255,255,.02);
+  z-index: 1;
+}
+
+.card::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: linear-gradient(180deg, rgba(28,26,43,.08), rgba(28,26,43,.78));
+  z-index: 1;
+}
+
+.card-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: .72;
 }
 
 .card:hover {
@@ -41,6 +59,7 @@
 
 .card-abbreviation {
   position: absolute;
+  z-index: 2;
   bottom: 9px;
   left: 0;
   max-width: calc(100% - 20px);
@@ -59,7 +78,7 @@
 
 .card-category {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   max-width: 100%;
   color: rgba(255,255,255,.94);
   font-size: 14px;
