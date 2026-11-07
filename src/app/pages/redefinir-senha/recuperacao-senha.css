@@ -50,6 +50,7 @@
 }
 .recovery-panel h1 { margin: 8px 0; font-size: clamp(24px, 5vw, 32px); line-height: 1.15; }
 .recovery-panel p { color: rgba(255, 255, 255, 0.72); line-height: 1.55; }
+.recovery-validation { margin: 0 0 14px; font-size: 13px; }
 .recovery-form { display: grid; gap: 17px; }
 .recovery-field { display: grid; gap: 7px; color: rgba(255, 255, 255, 0.82); font-size: 14px; font-weight: 650; }
 .recovery-field input {

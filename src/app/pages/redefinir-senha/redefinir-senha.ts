@@ -46,6 +46,14 @@ export class RedefinirSenha implements OnInit {
 
   async redefinir(): Promise<void> {
     this.erro = '';
+    if (!this.validacaoConcluida) {
+      this.erro = 'Aguarde a confirmação do link de recuperação.';
+      return;
+    }
+    if (!this.contextoValido) {
+      this.erro = 'O link de recuperação não é válido. Solicite outro e-mail.';
+      return;
+    }
     if (!this.novaSenha || !this.confirmarSenha) {
       this.erro = 'Preencha os dois campos de senha.';
       return;
@@ -58,7 +66,7 @@ export class RedefinirSenha implements OnInit {
       this.erro = 'As senhas não coincidem.';
       return;
     }
-    if (!this.contextoValido || this.enviando) return;
+    if (this.enviando) return;
 
     this.enviando = true;
     try {
@@ -85,6 +93,10 @@ export class RedefinirSenha implements OnInit {
     } finally {
       this.enviando = false;
     }
+  }
+
+  get validacaoConcluida(): boolean {
+    return !this.carregandoValidacao;
   }
 
   async voltarAoLogin(): Promise<void> {

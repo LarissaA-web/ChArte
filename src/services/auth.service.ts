@@ -120,6 +120,7 @@ export class AuthService {
   /** Auth UID whose database profile was validated for this app session. */
   private authUidAutorizado: string | null = null;
   private recoveryAuthUid: string | null = null;
+  private recoveryEventWaiters = new Map<string, Set<() => void>>();
 
   constructor() {
     this.inicializacaoPromise = this.inicializarSessao();
@@ -151,6 +152,7 @@ export class AuthService {
           if (evento === 'PASSWORD_RECOVERY' && sessao?.user) {
             this.recoveryAuthUid = sessao.user.id;
             this.salvarUidRecuperacao(sessao.user.id);
+            this.notificarRecoveryEvent(sessao.user.id);
             this.authUidAutorizado = null;
             this.emailUsuarioLogado = '';
             this.usuarioLogadoSubject.next(null);
@@ -253,11 +255,48 @@ export class AuthService {
       await this.comTimeout(this.aguardarInicializacao(), 10000);
       const { data, error } = await this.comTimeout(supabase.auth.getSession(), 10000);
       const uid = data.session?.user.id;
-      if (error || !uid || this.recuperacaoConsumida(uid) || !(await this.sessaoDeRecuperacaoValida(uid))) return false;
-      return true;
+      if (error || !uid || this.recuperacaoConsumida(uid)) return false;
+      if (await this.sessaoDeRecuperacaoValida(uid)) return true;
+
+      // O SDK emite PASSWORD_RECOVERY no próximo tick depois de concluir a
+      // troca PKCE/implicit. Aguarde esse evento específico; a sessão sozinha
+      // nunca autoriza a redefinição.
+      await this.aguardarEventoRecuperacao(uid, 1500);
+      return !this.recuperacaoConsumida(uid) && await this.sessaoDeRecuperacaoValida(uid);
     } catch {
       return false;
     }
+  }
+
+  private notificarRecoveryEvent(uid: string): void {
+    const waiters = this.recoveryEventWaiters.get(uid);
+    if (!waiters) return;
+    this.recoveryEventWaiters.delete(uid);
+    for (const resolve of waiters) resolve();
+  }
+
+  private async aguardarEventoRecuperacao(uid: string, limiteMs: number): Promise<void> {
+    if (await this.sessaoDeRecuperacaoValida(uid)) return;
+    await new Promise<void>((resolve) => {
+      let waiters = this.recoveryEventWaiters.get(uid);
+      if (!waiters) {
+        waiters = new Set();
+        this.recoveryEventWaiters.set(uid, waiters);
+      }
+      let concluido = false;
+      const finalizar = (): void => {
+        if (concluido) return;
+        concluido = true;
+        clearTimeout(timer);
+        waiters?.delete(finalizar);
+        if (waiters?.size === 0) this.recoveryEventWaiters.delete(uid);
+        resolve();
+      };
+      const timer = setTimeout(finalizar, limiteMs);
+      waiters.add(finalizar);
+      // Fecha a corrida em que o evento chega entre a primeira checagem e o registro.
+      if (this.recoveryAuthUid === uid || this.lerUidRecuperacao() === uid) finalizar();
+    });
   }
 
   async concluirRecuperacaoSenha(novaSenha: string): Promise<PasswordRecoveryResult> {
@@ -275,8 +314,14 @@ export class AuthService {
       return { status: 'network_error' };
     }
     const uid = data.session?.user.id;
-    if (sessionError || !uid || this.recuperacaoConsumida(uid) || !(await this.sessaoDeRecuperacaoValida(uid))) {
+    if (sessionError || !uid || this.recuperacaoConsumida(uid)) {
       return { status: 'invalid_flow' };
+    }
+    if (!(await this.sessaoDeRecuperacaoValida(uid))) {
+      await this.aguardarEventoRecuperacao(uid, 1500);
+      if (this.recuperacaoConsumida(uid) || !(await this.sessaoDeRecuperacaoValida(uid))) {
+        return { status: 'invalid_flow' };
+      }
     }
 
     this.loginAttemptInProgress = true;
