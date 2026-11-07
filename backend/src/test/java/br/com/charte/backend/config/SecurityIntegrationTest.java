@@ -61,4 +61,10 @@ class SecurityIntegrationTest {
                 .andExpect(jsonPath("$.followersCount").value(12))
                 .andExpect(jsonPath("$.followingCount").value(3));
     }
+
+    @Test
+    void deveProtegerConsultaDeIdsSeguidosDoUsuarioAutenticado() throws Exception {
+        mockMvc.perform(get("/api/followers/me/following-ids"))
+                .andExpect(status().isUnauthorized());
+    }
 }

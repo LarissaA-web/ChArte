@@ -22,6 +22,7 @@ class FollowerServiceTest {
         InMemoryCharteJdbcTemplate jdbcTemplate = new InMemoryCharteJdbcTemplate();
         jdbcTemplate.addUser(1L, "auth_fan", "fan_arte", "Fã de Arte", false);
         jdbcTemplate.addUser(2L, "auth_artist", "artista_pro", "Artista Profissional", true);
+        jdbcTemplate.addUser(3L, "auth_other", "outro_usuario", "Outro Usuário", false);
 
         AuthenticatedUserService authUserService = new AuthenticatedUserService(jdbcTemplate);
         followerService = new FollowerService(jdbcTemplate, authUserService);
@@ -61,6 +62,15 @@ class FollowerServiceTest {
     }
 
     @Test
+    void devePermitirSeguirSomentePerfisDeArtista() {
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> followerService.follow("outro_usuario", "auth_fan")
+        );
+        assertEquals(400, ex.getStatusCode().value());
+    }
+
+    @Test
     void deveImpedirRelacaoDeSeguimentoDuplicada() {
         followerService.follow("artista_pro", "auth_fan");
 
@@ -78,5 +88,12 @@ class FollowerServiceTest {
                 () -> followerService.follow("artista_pro", null)
         );
         assertEquals(401, ex.getStatusCode().value());
+    }
+
+    @Test
+    void listaIdsSeguidosDoUsuarioAutenticado() {
+        followerService.follow("artista_pro", "auth_fan");
+
+        assertEquals(List.of(2L), followerService.listFollowingIds("auth_fan"));
     }
 }

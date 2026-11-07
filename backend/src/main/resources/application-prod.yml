@@ -1,8 +1,16 @@
 spring:
   datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}?sslmode=verify-full&sslrootcert=${SUPABASE_CA_CERT_PATH:/etc/secrets/supabase-ca.crt}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
     hikari:
       initialization-fail-timeout: 1
 
 charte:
+  database:
+    mode: jdbc
+  supabase:
+    url: ${SUPABASE_URL}
+    anon-key: ${SUPABASE_ANON_KEY}
   payment:
-    provider: ${PAYMENT_PROVIDER:}
+    provider: ${CHARTE_PAYMENT_PROVIDER:${PAYMENT_PROVIDER:mock}}
