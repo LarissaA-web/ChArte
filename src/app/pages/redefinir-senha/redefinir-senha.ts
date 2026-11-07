@@ -88,6 +88,7 @@ export class RedefinirSenha implements OnInit {
       this.contextoValido = false;
       this.novaSenha = '';
       this.confirmarSenha = '';
+      window.alert('Senha modificada com sucesso. Acesse novamente com sua nova senha.');
     } catch {
       this.erro = 'Não foi possível concluir a alteração. Tente novamente ou solicite outro e-mail.';
     } finally {

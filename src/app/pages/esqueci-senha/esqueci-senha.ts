@@ -30,6 +30,7 @@ export class EsqueciSenha {
       const resultado = await this.auth.solicitarRedefinicaoSenha(this.email);
       if (resultado.status === 'sent') {
         this.solicitado = true;
+        window.alert('Se houver uma conta associada a este e-mail, o link de recuperação foi enviado. Confira sua caixa de entrada e a pasta de spam.');
       } else if (resultado.status === 'invalid_email') {
         this.erro = 'Informe um e-mail válido.';
       } else if (resultado.status === 'rate_limited') {
