@@ -146,12 +146,3 @@
   color: #efce89;
 }
 
-.pending-reviews { display: grid; gap: 10px; padding: 18px; border: 1px solid #614573; border-radius: 14px; background: #251d2a; }
-.pending-reviews h2 { margin: 0; font-size: 18px; }
-.pending-reviews > p,.pending-reviews-state { margin: 0; color: #b8adbf; font-size: 13px; }
-.pending-review-card { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid #403347; border-radius: 10px; background: #1d1920; }
-.pending-review-card > div { display: grid; gap: 4px; }
-.pending-review-card strong { font-size: 14px; }
-.pending-review-card small { color: #a99fad; font-size: 12px; }
-@media(max-width:600px) { .pending-review-card { align-items: flex-start; flex-direction: column; } }
-

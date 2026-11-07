@@ -26,7 +26,6 @@ interface PontoLinha extends DashboardChartPoint {
 export class ArtistDashboard {
   @Input() totalObras = 0;
   @Input() avaliacao = 0;
-  @Input() totalAvaliacoes = 0;
   @Input() dados: DashboardData = {
     metricas: { semana: 0, mes: 0, ano: 0, ganhos: 0, receitaTotal: 0, pendentes: 0, andamento: 0, finalizadas: 0 },
     comissoesSemana: [], comissoesMes: [], comissoesAno: [], ganhosPorMes: [], comissoesPorStatus: [],

@@ -45,7 +45,7 @@ export interface PerfilView {
   seguidores: number;
   seguindo: number;
 
-  avaliacaoMedia?: number | null;
+  avaliacaoMedia?: number;
   totalReviews?: number;
 
   idArtista?: number;

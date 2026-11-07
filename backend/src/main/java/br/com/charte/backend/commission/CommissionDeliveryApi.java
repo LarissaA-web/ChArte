@@ -45,12 +45,4 @@ public class CommissionDeliveryApi {
     ) {
         return deliveryService.registerDelivery(orderId, request.objectPath(), request.message(), jwt.getSubject());
     }
-
-    @PostMapping("/{orderId}/accept")
-    public DeliveryResponse acceptDelivery(
-            @PathVariable Long orderId,
-            @AuthenticationPrincipal Jwt jwt
-    ) {
-        return deliveryService.acceptDelivery(orderId, jwt.getSubject());
-    }
 }

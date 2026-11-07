@@ -14,9 +14,8 @@ import java.sql.SQLException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -26,9 +25,6 @@ class CommissionDeliveryServiceTest {
     private static final Long ORDER_ID = 33L;
     private static final Long ARTIST_USER_ID = 8L;
     private static final String AUTH_ID = "f33df301-8ec7-44ab-b85c-e643251edb73";
-    private static final String CLIENT_AUTH_ID = "a33df301-8ec7-44ab-b85c-e643251edb73";
-    private static final Long CLIENT_USER_ID = 7L;
-    private static final Long PAYMENT_ID = 120L;
     private static final String OBJECT_PATH = ORDER_ID + "/" + AUTH_ID + "/550e8400-e29b-41d4-a716-446655440000.png";
 
     private JdbcTemplate jdbcTemplate;
@@ -113,46 +109,6 @@ class CommissionDeliveryServiceTest {
                 () -> service.createDeliveryUrl(ORDER_ID, AUTH_ID, "jwt"));
 
         assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
-    }
-
-    @Test
-    void clienteAceitaEntregaERegistraLiberacaoUmaUnicaVez() throws SQLException {
-        when(authenticatedUserService.requireUserByAuthId(CLIENT_AUTH_ID)).thenReturn(
-                new AuthenticatedUserService.UserAccount(CLIENT_USER_ID, "cliente", "Cliente", null, CLIENT_AUTH_ID));
-        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), eq(ORDER_ID), eq(CLIENT_USER_ID)))
-                .thenAnswer(invocation -> {
-                    ResultSet rs = mock(ResultSet.class);
-                    when(rs.getLong("id_pedido")).thenReturn(ORDER_ID);
-                    when(rs.getLong("id_artista")).thenReturn(19L);
-                    when(rs.getString("status_comissao")).thenReturn("Entregue");
-                    when(rs.getLong("id_pagamento")).thenReturn(PAYMENT_ID);
-                    when(rs.getLong("id_cliente")).thenReturn(CLIENT_USER_ID);
-                    when(rs.getBigDecimal("valor_artista")).thenReturn(new java.math.BigDecimal("92.00"));
-                    return ((RowMapper<?>) invocation.getArgument(1)).mapRow(rs, 0);
-                });
-        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(PAYMENT_ID))).thenReturn(0);
-        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
-
-        CommissionDeliveryApi.DeliveryResponse response = service.acceptDelivery(ORDER_ID, CLIENT_AUTH_ID);
-
-        assertEquals("Finalizada", response.status());
-        verify(jdbcTemplate).update(contains("UPDATE public.pedidos_principal"), eq(ORDER_ID), eq(CLIENT_USER_ID));
-        verify(jdbcTemplate).update(contains("INSERT INTO public.movimentacoes_financeiras"),
-                eq(PAYMENT_ID), eq(CLIENT_USER_ID), eq(19L), eq(new java.math.BigDecimal("92.00")), anyString());
-    }
-
-    @Test
-    void clienteNaoPodeAceitarEntregaDeOutroUsuario() {
-        when(authenticatedUserService.requireUserByAuthId(CLIENT_AUTH_ID)).thenReturn(
-                new AuthenticatedUserService.UserAccount(CLIENT_USER_ID, "cliente", "Cliente", null, CLIENT_AUTH_ID));
-        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), eq(ORDER_ID), eq(CLIENT_USER_ID)))
-                .thenThrow(new org.springframework.dao.EmptyResultDataAccessException(1));
-
-        ResponseStatusException error = assertThrows(ResponseStatusException.class,
-                () -> service.acceptDelivery(ORDER_ID, CLIENT_AUTH_ID));
-
-        assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode());
-        verify(jdbcTemplate, never()).update(anyString(), any(Object[].class));
     }
 
     private void mockOrder(Long artistUserId, String status, boolean paid) {

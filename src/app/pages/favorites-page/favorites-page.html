@@ -145,20 +145,6 @@
   <!-- ABA 4: HISTÓRICO DE PAGAMENTOS SIMULADOS -->
   @if (aba === 'pagamentos') {
     <section class="orders-list">
-      @if (carregandoAvaliacoesPendentes) {
-        <p class="pending-reviews-state">Verificando compras e pedidos que podem ser avaliados…</p>
-      } @else if (avaliacoesPendentes.length) {
-        <section class="pending-reviews" aria-label="Transações aguardando avaliação">
-          <h2>Avalie suas compras e comissões</h2>
-          <p>Você pode deixar sua opinião agora ou voltar a esta aba depois.</p>
-          @for (target of avaliacoesPendentes; track target.origin.type + target.origin.id) {
-            <article class="pending-review-card">
-              <div><span class="order-overline">{{ target.origin.type === 'pedido' ? 'COMISSÃO CONCLUÍDA' : 'COMPRA CONFIRMADA' }}</span><strong>{{ target.artistName }}</strong><small>Pagamento aprovado · avaliação disponível</small></div>
-              <button type="button" class="btn-checkout-now" (click)="avaliar(target)">★ Avaliar</button>
-            </article>
-          }
-        </section>
-      }
       <div class="filter-pills">
         <button type="button" [class.active]="filtroStatusPagamento === 'TODOS'" (click)="filtroStatusPagamento = 'TODOS'">Todos</button>
         <button type="button" [class.active]="filtroStatusPagamento === 'APPROVED'" (click)="filtroStatusPagamento = 'APPROVED'">Aprovados</button>
@@ -240,7 +226,3 @@
     </section>
   }
 </main>
-
-<app-artist-review-modal [open]="!!avaliacaoAtiva" [origin]="avaliacaoAtiva?.origin ?? null"
-  [artistName]="avaliacaoAtiva?.artistName || 'este artista'"
-  (closed)="avaliacaoAtiva = null" (submitted)="atualizarAvaliacoesPendentes()" />

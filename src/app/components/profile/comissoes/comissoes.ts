@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Component, Input, OnDestroy, OnInit } from '@angular/core';
-import { CurrencyPipe, DecimalPipe } from '@angular/common';
+import { CurrencyPipe } from '@angular/common';
 import { AuthService } from '../../../../services/auth.service';
 import { ArtistAreaService } from '../../../../services/artist-area.service';
 import { PerfilView } from '../../../models/perfil';
@@ -12,7 +12,7 @@ import { Subscription } from 'rxjs';
 @Component({
   selector: 'app-comissoes',
   standalone: true,
-  imports: [CurrencyPipe, DecimalPipe, FormsModule],
+  imports: [CurrencyPipe, FormsModule],
   templateUrl: './comissoes.html',
   styleUrl: './comissoes.css',
 })

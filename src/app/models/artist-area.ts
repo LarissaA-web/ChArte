@@ -17,8 +17,6 @@ export interface Comissao {
   criadaEm: string;
   prazo: string;
   status: StatusComissao;
-  /** Estado operacional persistido em pedidos_principal.status_pedido. */
-  statusPedido?: string;
   concluidaEm?: string;
   observacaoEntrega?: string;
   arquivoEntrega?: string;

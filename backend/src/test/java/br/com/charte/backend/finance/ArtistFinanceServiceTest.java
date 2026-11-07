@@ -53,14 +53,6 @@ class ArtistFinanceServiceTest {
             for (int i = 0; i < rows.size(); i++) mapped.add(mapper.mapRow(resultSet(rows.get(i)), i));
             return mapped;
         }).when(jdbc).query(anyString(), any(RowMapper.class), any(Object[].class));
-        doAnswer(invocation -> {
-            @SuppressWarnings("unchecked") RowMapper<long[]> mapper = invocation.getArgument(1);
-            long artistId = ((Number) invocation.getArguments()[2]).longValue();
-            long pending = artistId == 99L ? 0 : 2;
-            long production = artistId == 99L ? 0 : 3;
-            long completed = artistId == 99L ? 0 : 4;
-            return mapper.mapRow(resultSet(Map.of("1", pending, "2", production, "3", completed)), 0);
-        }).when(jdbc).queryForObject(anyString(), any(RowMapper.class), any(Object[].class));
     }
 
     @Test
@@ -74,10 +66,7 @@ class ArtistFinanceServiceTest {
         assertEquals(1, summary.approvedPaymentsMissingMovements());
         assertEquals(1, summary.financialFieldDiscrepancies());
         assertEquals(1, summary.unclassifiedPayments());
-        assertEquals(2, summary.pendingOrders());
-        assertEquals(3, summary.productionOrders());
-        assertEquals(4, summary.completedOrders());
-        assertEquals(List.of(77L, 77L), queriedArtistIds);
+        assertEquals(List.of(77L, 77L, 77L), queriedArtistIds);
         verify(authenticatedUserService).requireUserIdByAuthId("jwt-artist-a");
     }
 
@@ -94,7 +83,7 @@ class ArtistFinanceServiceTest {
     void eachJwtResolvesToItsOwnFinancialRows() {
         ArtistFinanceService.FinanceSummary summary = service.summary("jwt-artist-b");
         assertEquals(new BigDecimal("20.00"), summary.grossRevenue());
-        assertEquals(List.of(88L, 88L), queriedArtistIds);
+        assertEquals(List.of(88L, 88L, 88L), queriedArtistIds);
     }
 
     @Test
@@ -105,9 +94,6 @@ class ArtistFinanceServiceTest {
         assertEquals(new BigDecimal("0.00"), summary.artistNet());
         assertEquals(new BigDecimal("0.00"), summary.heldBalance());
         assertEquals(new BigDecimal("0.00"), summary.availableBalance());
-        assertEquals(0, summary.pendingOrders());
-        assertEquals(0, summary.productionOrders());
-        assertEquals(0, summary.completedOrders());
         assertEquals(List.of(), summary.monthlyRevenue());
     }
 
@@ -143,8 +129,7 @@ class ArtistFinanceServiceTest {
         return (ResultSet) Proxy.newProxyInstance(ResultSet.class.getClassLoader(), new Class[]{ResultSet.class},
                 (proxy, method, args) -> {
                     if (method.getName().equals("getLong")) {
-                        Object key = args[0] instanceof Integer index ? String.valueOf(index) : args[0];
-                        Object value = row.get(key);
+                        Object value = row.get(args[0]);
                         wasNull[0] = value == null;
                         return value == null ? 0L : ((Number) value).longValue();
                     }

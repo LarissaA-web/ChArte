@@ -33,7 +33,7 @@ public class ArtistFinanceService {
         this.authenticatedUserService = authenticatedUserService;
     }
 
-    public record MonthlyRevenue(String month, BigDecimal gross, BigDecimal artistNet) {}
+    public record MonthlyRevenue(String month, BigDecimal gross) {}
     public record FinanceSummary(
             BigDecimal grossRevenue,
             BigDecimal platformFees,
@@ -43,9 +43,6 @@ public class ArtistFinanceService {
             long approvedPayments,
             long readyArtSales,
             long commissions,
-            long pendingOrders,
-            long productionOrders,
-            long completedOrders,
             long unclassifiedPayments,
             long approvedPaymentsMissingMovements,
             long movementsWithoutApprovedPayment,
@@ -65,8 +62,6 @@ public class ArtistFinanceService {
     private record Payment(
             Long id,
             Long portfolioId,
-            Long orderId,
-            String orderTitle,
             BigDecimal gross,
             String status,
             String gatewayStatus,
@@ -83,7 +78,7 @@ public class ArtistFinanceService {
         long artistId = requireArtistId(authId);
         List<Payment> payments = loadPayments(artistId);
         List<MovementRow> movements = loadMovements(artistId);
-        long[] orderCounts = loadOrderCounts(artistId);
+        Set<Long> commissionPaymentIds = loadCommissionPaymentIds(artistId);
 
         BigDecimal gross = ZERO;
         BigDecimal fees = ZERO;
@@ -107,10 +102,8 @@ public class ArtistFinanceService {
             if (!isApproved(payment)) continue;
             approvedCount++;
             approvedById.put(payment.id(), payment);
-            boolean readyPurchase = payment.portfolioId() != null
-                    || (payment.orderTitle() != null && payment.orderTitle().startsWith("Aquisição:"));
-            if (readyPurchase) readyCount++;
-            else if (payment.orderId() != null) commissionCount++;
+            if (payment.portfolioId() != null && !commissionPaymentIds.contains(payment.id())) readyCount++;
+            else if (payment.portfolioId() == null && commissionPaymentIds.contains(payment.id())) commissionCount++;
             else unclassifiedCount++;
 
             if (payment.gross() != null) gross = gross.add(payment.gross()); else grossComplete = false;
@@ -135,14 +128,12 @@ public class ArtistFinanceService {
                     if (payment != null && movement.createdAt() != null) {
                         YearMonth month = YearMonth.from(movement.createdAt());
                         if (payment.gross() != null) {
-                            BigDecimal[] totals = monthly.computeIfAbsent(month, ignored -> new BigDecimal[]{ZERO, ZERO});
+                            BigDecimal[] totals = monthly.computeIfAbsent(month, ignored -> new BigDecimal[]{ZERO});
                             totals[0] = totals[0].add(payment.gross());
-                            if (payment.net() != null) totals[1] = totals[1].add(payment.net());
                         }
                     }
                 }
-            } else if ("credito_liberado".equalsIgnoreCase(movement.type())
-                    || "liberacao_artista".equalsIgnoreCase(movement.type())) {
+            } else if ("credito_liberado".equalsIgnoreCase(movement.type())) {
                 available = available.add(orZero(movement.amount()));
                 held = held.subtract(orZero(movement.amount()));
             } else if ("debito_retido".equalsIgnoreCase(movement.type())
@@ -155,18 +146,16 @@ public class ArtistFinanceService {
         }
 
         long missingMovements = approvedById.keySet().stream().filter(id -> !movementPaymentIds.contains(id)).count();
-        boolean monthlyComplete = missingMovements == 0 && grossComplete && netComplete;
+        boolean monthlyComplete = missingMovements == 0 && grossComplete;
         List<MonthlyRevenue> monthlyRevenue = monthlyComplete ? monthly.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .map(entry -> new MonthlyRevenue(entry.getKey().format(MONTH_LABEL),
-                        money(entry.getValue()[0]), money(entry.getValue()[1])))
+                .map(entry -> new MonthlyRevenue(entry.getKey().format(MONTH_LABEL), money(entry.getValue()[0])))
                 .toList() : List.of();
 
         return new FinanceSummary(grossComplete ? money(gross) : null,
                 feesComplete ? money(fees) : null, netComplete ? money(net) : null,
                 money(held), money(available),
-                approvedCount, readyCount, commissionCount, orderCounts[0], orderCounts[1], orderCounts[2],
-                unclassifiedCount, missingMovements,
+                approvedCount, readyCount, commissionCount, unclassifiedCount, missingMovements,
                 movementsWithoutApprovedPayment, discrepancies, monthlyRevenue);
     }
 
@@ -210,15 +199,11 @@ public class ArtistFinanceService {
     private List<Payment> loadPayments(long artistId) {
         return jdbcTemplate.query(
                 """
-                SELECT pg.id_pagamento, pg.id_portifolio, pg.id_pedido, ped.titulo AS titulo_pedido,
-                       pg.valor, pg.status_pagamento, pg.gateway_status, pg.taxa_percentual,
-                       pg.taxa_plataforma, pg.valor_artista
-                FROM public.pagamentos pg
-                LEFT JOIN public.pedidos_principal ped ON ped.id_pedido = pg.id_pedido
-                WHERE pg.id_artista = ? ORDER BY pg.id_pagamento
+                SELECT id_pagamento, id_portifolio, valor, status_pagamento, gateway_status,
+                       taxa_percentual, taxa_plataforma, valor_artista
+                FROM public.pagamentos WHERE id_artista = ? ORDER BY id_pagamento
                 """,
                 (rs, rowNum) -> new Payment(rs.getLong("id_pagamento"), nullableLong(rs, "id_portifolio"),
-                        nullableLong(rs, "id_pedido"), rs.getString("titulo_pedido"),
                         rs.getBigDecimal("valor"), rs.getString("status_pagamento"), rs.getString("gateway_status"),
                         rs.getBigDecimal("taxa_percentual"), rs.getBigDecimal("taxa_plataforma"), rs.getBigDecimal("valor_artista")),
                 artistId);
@@ -237,15 +222,10 @@ public class ArtistFinanceService {
                 artistId);
     }
 
-    private long[] loadOrderCounts(long artistId) {
-        return jdbcTemplate.queryForObject(
-                """
-                SELECT COUNT(*) FILTER (WHERE status_comissao IN ('Solicitada', 'Pendente', 'Aguardando aprovação do cliente')),
-                       COUNT(*) FILTER (WHERE status_comissao IN ('Em andamento', 'Entregue')),
-                       COUNT(*) FILTER (WHERE status_comissao = 'Finalizada')
-                FROM public.pedidos_principal WHERE id_artista = ?
-                """,
-                (rs, rowNum) -> new long[]{rs.getLong(1), rs.getLong(2), rs.getLong(3)}, artistId);
+    private Set<Long> loadCommissionPaymentIds(long artistId) {
+        return new HashSet<>(jdbcTemplate.query(
+                "SELECT id_pagamento FROM public.comissao WHERE id_artista = ? AND id_pagamento IS NOT NULL",
+                (rs, rowNum) -> rs.getLong("id_pagamento"), artistId));
     }
 
     private boolean isApproved(Payment payment) {

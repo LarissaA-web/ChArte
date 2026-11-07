@@ -15,13 +15,11 @@ import {
 } from '../../models/artist-area';
 import { PaymentService, PaymentView } from '../../../services/payment.service';
 import { Subscription, combineLatest } from 'rxjs';
-import { ArtistReviewModal } from '../../components/artist-review-modal/artist-review-modal';
-import { ArtistReviewService, ReviewTarget } from '../../../services/artist-review.service';
 
 @Component({
   selector: 'app-order-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyPipe, DatePipe, RouterLink, ArtistReviewModal],
+  imports: [CommonModule, FormsModule, CurrencyPipe, DatePipe, RouterLink],
   template: `
     <main class="order-detail-page">
       @if (pedido) {
@@ -598,13 +596,6 @@ import { ArtistReviewService, ReviewTarget } from '../../../services/artist-revi
             }
           </aside>
         </div>
-
-        @if (reviewTarget) {
-          <button class="review-again" type="button" (click)="abrirModalAvaliacao()">★ Avaliar esta transação</button>
-        }
-        <app-artist-review-modal [open]="modalAvaliacaoAberto" [origin]="reviewTarget?.origin ?? null"
-          [artistName]="reviewTarget?.artistName || pedido.artistaUsername"
-          (closed)="modalAvaliacaoAberto = false" (submitted)="avaliacaoConcluida()" />
       } @else if (carregandoPedido) {
         <section class="missing-order">
           <h1>Carregando pedido...</h1>
@@ -621,7 +612,7 @@ import { ArtistReviewService, ReviewTarget } from '../../../services/artist-revi
   `,
   styles: [`
     :host{display:block;min-height:100vh;background:#151217;color:#f8f5fa}
-    .order-detail-page{max-width:1440px;margin:auto;padding:40px clamp(20px,4vw,64px) 88px}
+    .order-detail-page{max-width:1160px;margin:auto;padding:36px 24px 80px}
     .top-nav-links{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
     .back-link{color:#c994e4;text-decoration:none;font-weight:700;font-size:13px}
     .back-link.secondary{color:#9e94a3}
@@ -633,10 +624,9 @@ import { ArtistReviewService, ReviewTarget } from '../../../services/artist-revi
     .detail-heading h1{font-size:32px;margin:8px 0}
     .detail-heading p{color:#aaa0af;margin:0;font-size:14px}
     .detail-heading a{color:#d396f1;text-decoration:none;font-weight:700}
-    .detail-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(370px,.85fr);gap:clamp(22px,3vw,40px);align-items:start}
-    .left-column{display:grid;gap:24px;min-width:0}
-    .detail-card{background:#211b25;border:1px solid #3b313f;border-radius:16px;padding:clamp(22px,2vw,30px);min-width:0}
-    .summary-card{position:sticky;top:24px}
+    .detail-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(340px,.95fr);gap:20px;align-items:start}
+    .left-column{display:grid;gap:20px}
+    .detail-card{background:#211b25;border:1px solid #3b313f;border-radius:16px;padding:24px}
     .detail-card-heading{display:flex;align-items:center;justify-content:space-between;gap:15px}
     .detail-card h2{font-size:19px;margin:7px 0 0}
     .detail-status{background:#45371c;color:#efce89;border-radius:20px;padding:7px 12px;font-size:12px;font-weight:700}
@@ -743,9 +733,7 @@ import { ArtistReviewService, ReviewTarget } from '../../../services/artist-revi
     .missing-order{padding:100px 0;text-align:center}
     .missing-order p{color:#aaa0af}
     .missing-order a{color:#d396f1}
-    .review-again{width:100%;margin-top:10px;padding:10px;border:1px solid #76538b;border-radius:9px;background:#32243a;color:#edcffc;font-weight:700;cursor:pointer}
-    @media(max-width:900px){.detail-grid{grid-template-columns:1fr}.summary-card{position:static}}
-    @media(max-width:820px){.order-detail-page{padding:24px 16px 55px}.detail-heading h1{font-size:26px}}
+    @media(max-width:820px){.order-detail-page{padding:24px 16px 55px}.detail-grid{grid-template-columns:1fr}.detail-heading h1{font-size:26px}}
   `],
 })
 export class OrderDetail implements OnInit, OnDestroy {
@@ -761,8 +749,6 @@ export class OrderDetail implements OnInit, OnDestroy {
   statusMensagem = '';
   statusErro = false;
   statusCarregando = false;
-  modalAvaliacaoAberto = false;
-  reviewTarget: ReviewTarget | null = null;
 
   metodoPagamento: 'pix' | 'card' | 'transfer' = 'pix';
   checkoutAtivo = false;
@@ -862,7 +848,6 @@ export class OrderDetail implements OnInit, OnDestroy {
     private artistData: ArtistAreaService,
     private auth: AuthService,
     private pagamentos: PaymentService,
-    private artistReviews: ArtistReviewService,
     private cdr: ChangeDetectorRef,
   ) {}
 
@@ -895,9 +880,6 @@ export class OrderDetail implements OnInit, OnDestroy {
 
       if (encontrado && pertenceAoUsuario) {
         this.pedido = { ...encontrado };
-        if (encontrado.cliente.username.toLowerCase() === usuario.nomeUsuario.toLowerCase() && !this.reviewTarget) {
-          void this.atualizarElegibilidadeAvaliacao(encontrado.id);
-        }
         if (this.ehCompraDireta && this.podePagar) {
           this.checkoutAtivo = true;
         }
@@ -1046,11 +1028,31 @@ export class OrderDetail implements OnInit, OnDestroy {
       await this.artistData.recarregarComissoes();
       const comissaoAtualizada = this.artistData.obterComissao(pedidoId);
       const compraDireta = ehCompraDiretaArte(comissaoAtualizada ?? this.pedido);
-      if (comissaoAtualizada) this.pedido = { ...comissaoAtualizada };
+      if (comissaoAtualizada) {
+        this.pedido = {
+          ...comissaoAtualizada,
+          pagamentoStatus: aprovado ? 'pago' : 'falhou',
+          status:
+            aprovado
+              ? compraDireta
+                ? 'Finalizada'
+                : comissaoAtualizada.status !== 'Entregue' &&
+                    comissaoAtualizada.status !== 'Finalizada'
+                  ? 'Em andamento'
+                  : comissaoAtualizada.status
+              : comissaoAtualizada.status,
+          pagamentoLiberado: aprovado && compraDireta ? true : comissaoAtualizada.pagamentoLiberado,
+          arquivoEntrega:
+            aprovado && compraDireta && !comissaoAtualizada.arquivoEntrega && comissaoAtualizada.referencias.length > 0
+              ? comissaoAtualizada.referencias[0]
+              : comissaoAtualizada.arquivoEntrega,
+          paymentId: resultado.paymentId || comissaoAtualizada.paymentId,
+          pagamento: resultado.method || comissaoAtualizada.pagamento,
+        };
+      }
       await this.carregarHistoricoPedido(pedidoId);
 
-      const pagamentoConfirmadoNoBanco = comissaoAtualizada?.pagamentoStatus === 'pago';
-      if (aprovado && pagamentoConfirmadoNoBanco) {
+      if (aprovado) {
         this.checkoutAtivo = false;
         this.pagamentoErro = false;
         this.pagamentoTitulo = 'Pagamento aprovado';
@@ -1058,17 +1060,13 @@ export class OrderDetail implements OnInit, OnDestroy {
           ? 'Pagamento aprovado! Compra concluída com sucesso.'
           : resultado.simulationDetails ||
             'Pagamento simulado aprovado! O valor fica retido até você aprovar a entrega da comissão.';
-        if (compraDireta) {
-          await this.atualizarElegibilidadeAvaliacao(pedidoId);
-          if (this.reviewTarget) this.abrirModalAvaliacao();
-        }
       } else {
         this.checkoutAtivo = false;
         this.pagamentoErro = true;
-        this.pagamentoTitulo = aprovado ? 'Pagamento ainda não confirmado' : 'Pagamento recusado na simulação';
-        this.pagamentoMensagem = aprovado
-          ? 'O processador aprovou a tentativa, mas o ChArte ainda não confirmou o pagamento salvo. Atualize o pedido antes de continuar.'
-          : resultado.simulationDetails || 'Pagamento recusado na simulação. Você pode iniciar uma nova tentativa.';
+        this.pagamentoTitulo = 'Pagamento recusado na simulação';
+        this.pagamentoMensagem =
+          resultado.simulationDetails ||
+          'Pagamento recusado na simulação. Você pode iniciar uma nova tentativa.';
       }
     } catch (err: any) {
       this.definirErroPagamento(err, 'Ocorreu um erro ao processar a simulação de pagamento.');
@@ -1119,7 +1117,13 @@ export class OrderDetail implements OnInit, OnDestroy {
       await this.artistData.atualizarPagamento(pedidoId, 'falhou', { reembolso: true });
       await this.artistData.recarregarComissoes();
       const comissaoAtualizada = this.artistData.obterComissao(pedidoId);
-      if (comissaoAtualizada) this.pedido = { ...comissaoAtualizada };
+      if (comissaoAtualizada) {
+        this.pedido = {
+          ...comissaoAtualizada,
+          pagamentoStatus: 'falhou',
+          status: 'Pendente',
+        };
+      }
       await this.carregarHistoricoPedido(pedidoId);
       this.pagamentoErro = false;
       this.pagamentoMensagem = 'Reembolso simulado registrado com sucesso.';
@@ -1199,7 +1203,7 @@ export class OrderDetail implements OnInit, OnDestroy {
     try {
       const atualizado = await this.artistData.atualizarStatus(this.pedido.id, 'Pendente');
       if (!atualizado) {
-        this.statusMensagem = this.artistData.obterUltimoErroAtualizacao() || 'Não foi possível aprovar a proposta. Verifique sua conexão e tente novamente.';
+        this.statusMensagem = 'Não foi possível aprovar a proposta. Verifique sua conexão e tente novamente.';
         this.statusErro = true;
         return;
       }
@@ -1229,7 +1233,7 @@ export class OrderDetail implements OnInit, OnDestroy {
     try {
       const atualizado = await this.artistData.atualizarStatus(this.pedido.id, 'Cancelada');
       if (!atualizado) {
-        this.statusMensagem = this.artistData.obterUltimoErroAtualizacao() || 'Não foi possível cancelar o pedido.';
+        this.statusMensagem = 'Não foi possível cancelar o pedido.';
         this.statusErro = true;
         return;
       }
@@ -1259,18 +1263,16 @@ export class OrderDetail implements OnInit, OnDestroy {
     try {
       const ok = await this.artistData.aprovarEntregaCliente(this.pedido.id);
       if (!ok) {
-        this.statusMensagem = this.artistData.obterUltimoErroAtualizacao() || 'Não foi possível registrar a aprovação da entrega.';
+        this.statusMensagem = 'Não foi possível registrar a aprovação da entrega.';
         this.statusErro = true;
         return;
       }
 
       const comissao = this.artistData.obterComissao(this.pedido.id);
       if (comissao) {
-        this.pedido = { ...comissao };
+        this.pedido = { ...comissao, status: 'Finalizada', pagamentoLiberado: true };
       }
       this.statusMensagem = `Comissão finalizada! Pagamento liberado para o artista.`;
-      await this.atualizarElegibilidadeAvaliacao(this.pedido.id);
-      if (this.reviewTarget) this.abrirModalAvaliacao();
     } catch {
       this.statusMensagem = 'Ocorreu um erro ao aprovar a entrega.';
       this.statusErro = true;
@@ -1278,24 +1280,6 @@ export class OrderDetail implements OnInit, OnDestroy {
       this.statusCarregando = false;
       this.cdr.detectChanges();
     }
-  }
-
-  private async atualizarElegibilidadeAvaliacao(idPedido: number): Promise<void> {
-    try {
-      this.reviewTarget = await this.artistReviews.buscarElegibilidadeDoPedido(idPedido);
-    } catch {
-      this.reviewTarget = null;
-    } finally {
-      this.cdr.detectChanges();
-    }
-  }
-
-  abrirModalAvaliacao(): void {
-    if (this.reviewTarget) this.modalAvaliacaoAberto = true;
-  }
-
-  avaliacaoConcluida(): void {
-    this.reviewTarget = null;
   }
 
   async recusarEntrega(): Promise<void> {
@@ -1309,14 +1293,14 @@ export class OrderDetail implements OnInit, OnDestroy {
     try {
       const ok = await this.artistData.recusarEntregaCliente(this.pedido.id);
       if (!ok) {
-        this.statusMensagem = this.artistData.obterUltimoErroAtualizacao() || 'Não foi possível recusar a entrega no momento.';
+        this.statusMensagem = 'Não foi possível recusar a entrega no momento.';
         this.statusErro = true;
         return;
       }
 
       const comissao = this.artistData.obterComissao(this.pedido.id);
       if (comissao) {
-        this.pedido = { ...comissao };
+        this.pedido = { ...comissao, status: 'Recusada', pagamentoLiberado: true };
       }
       this.statusMensagem = `Entrega recusada. O artista recebeu 50% do pagamento (${this.repasseRecusa.valorLiquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`;
     } catch {
@@ -1346,7 +1330,7 @@ export class OrderDetail implements OnInit, OnDestroy {
 
       const comissao = this.artistData.obterComissao(this.pedido.id);
       if (comissao) {
-        this.pedido = { ...comissao };
+        this.pedido = { ...comissao, status: 'Em andamento' };
       }
       this.statusMensagem = 'Solicitação de ajustes enviada! O pedido voltou para produção.';
     } catch {
