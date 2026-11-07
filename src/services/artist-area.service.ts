@@ -59,20 +59,14 @@ export class ArtistAreaService {
   private readonly avaliacoesSubject = new BehaviorSubject<AvaliacaoArtista[]>([]);
   private readonly artistaAliases = new Map<string, Set<string>>();
 
-<<<<<<< Updated upstream
-  private readonly PAGAMENTOS_STORAGE_KEY = 'charte_pagamentos_comissao_v1';
   private readonly ENTREGAS_STORAGE_KEY = 'charte_entregas_comissao_v1';
 
   constructor(
+    private readonly http: HttpClient,
     private readonly commissionDelivery: CommissionDeliveryService,
     private readonly artistReviews: ArtistReviewService,
   ) {
     this.artistReviews.avaliacaoCriada$.subscribe(() => void this.carregarAvaliacoes());
-=======
-  private readonly ENTREGAS_STORAGE_KEY = 'charte_entregas_comissao_v1';
-
-  constructor(private http: HttpClient) {
->>>>>>> Stashed changes
     this.carregarTudo();
   }
 
@@ -202,12 +196,8 @@ export class ArtistAreaService {
       }
     }
 
-<<<<<<< Updated upstream
     // Dados legados permanecem no localStorage, mas não são fonte de status.
     // Os pedidos e sua conclusão sempre refletem a resposta persistida do Supabase.
-=======
-    // Status financeiros e de pedido são lidos apenas dos registros persistidos.
->>>>>>> Stashed changes
     const entregasLocais = this.lerMapaLocal<{
       arquivoEntrega: string;
       observacaoEntrega: string;
@@ -286,11 +276,7 @@ export class ArtistAreaService {
       const pagamento = pagamentosPorPedido.get(item.id_pedido);
       const entregaLocal = entregasLocais[String(item.id_pedido)];
 
-<<<<<<< Updated upstream
       const statusFinal = mapearStatus(item.status_comissao);
-=======
-      let statusFinal = mapearStatus(item.status_comissao, item.status_pedido);
->>>>>>> Stashed changes
 
       let pagStatusFinal =
         mapearStatusPagamento(pagamento?.status_pagamento, pagamento?.gateway_status);
@@ -345,13 +331,8 @@ export class ArtistAreaService {
         entregaLocal?.arquivosEntrega ||
         (arquivoEntregaFinal ? [{ nome: 'Arquivo da comissão', url: arquivoEntregaFinal }] : undefined);
 
-<<<<<<< Updated upstream
       if (compraDireta && !arquivoEntregaFinal && statusFinal === 'Finalizada' && referenciasLimpas.length > 0) {
         arquivoEntregaFinal = referenciasLimpas[0];
-=======
-      if (arquivoEntregaFinal && statusFinal === 'Em andamento') {
-        statusFinal = 'Entregue';
->>>>>>> Stashed changes
       }
 
       const pagamentoLiberado =
@@ -374,10 +355,7 @@ export class ArtistAreaService {
         criadaEm: item.data_criacao,
         prazo: item.prazo ?? '',
         status: statusFinal,
-<<<<<<< Updated upstream
         statusPedido: item.status_pedido ?? undefined,
-=======
->>>>>>> Stashed changes
         concluidaEm: item.concluida_em ?? undefined,
         pagamento: mapearMetodo(pagamento?.metodo),
         pagamentoStatus: pagStatusFinal,
@@ -564,21 +542,12 @@ export class ArtistAreaService {
   }
 
   async atualizarStatus(id: number, status: StatusComissao): Promise<boolean> {
-<<<<<<< Updated upstream
     this.ultimoErroAtualizacao = '';
     const atual = this.comissoesSubject.value.find((item) => item.id === id);
     if (!atual) {
       this.ultimoErroAtualizacao = 'Pedido não carregado. Atualize a página e tente novamente.';
       return false;
     }
-    const atualizacoes: Record<string, unknown> = {};
-=======
-    const { data: atual, error: erroLeitura } = await supabase
-      .from('pedidos_principal')
-      .select('status_comissao')
-      .eq('id_pedido', id)
-      .maybeSingle();
-    if (erroLeitura || !atual) return false;
     const transicoesPermitidas: Record<string, StatusComissao[]> = {
       Solicitada: ['Pendente', 'Aguardando aprovação do cliente', 'Recusada', 'Cancelada'],
       Pendente: ['Em andamento', 'Recusada', 'Cancelada'],
@@ -586,8 +555,10 @@ export class ArtistAreaService {
       'Em andamento': ['Entregue', 'Recusada', 'Cancelada'],
       Entregue: ['Finalizada', 'Recusada', 'Em andamento'],
     };
-    if (!transicoesPermitidas[atual.status_comissao]?.includes(status)) return false;
->>>>>>> Stashed changes
+    if (!transicoesPermitidas[atual.status]?.includes(status)) {
+      this.ultimoErroAtualizacao = `Transição inválida: ${atual.status} → ${status}.`;
+      return false;
+    }
 
     const atualizacoes: Record<string, unknown> = {};
     switch (status) {
@@ -616,7 +587,6 @@ export class ArtistAreaService {
         atualizacoes['status_pedido'] = 'Cancelado';
         break;
     }
-<<<<<<< Updated upstream
 
     if (status === 'Finalizada') atualizacoes['concluida_em'] = new Date().toISOString();
 
@@ -625,6 +595,7 @@ export class ArtistAreaService {
         .from('pedidos_principal')
         .update(atualizacoes)
         .eq('id_pedido', id)
+        .eq('status_comissao', atual.status)
         .select('id_pedido, status_comissao, status_pedido, concluida_em')
         .maybeSingle();
 
@@ -650,17 +621,6 @@ export class ArtistAreaService {
       this.ultimoErroAtualizacao = 'Falha de conexão ao salvar o pedido. Nenhuma alteração foi confirmada.';
       return false;
     }
-=======
-    const { data, error } = await supabase.from('pedidos_principal')
-      .update(atualizacoes).eq('id_pedido', id).eq('status_comissao', atual.status_comissao)
-      .select('id_pedido, status_comissao, status_pedido, concluida_em').maybeSingle();
-    if (error || !data || data.status_comissao !== status) {
-      console.error('Não foi possível confirmar a atualização do pedido no Supabase:', error);
-      return false;
-    }
-    await this.carregarComissoes();
-    return true;
->>>>>>> Stashed changes
   }
 
   async vincularCheckout(
@@ -670,29 +630,8 @@ export class ArtistAreaService {
     _status: 'pendente' | 'pago' | 'falhou',
     _metodo: 'pix' | 'card' | 'transfer',
   ): Promise<void> {
-<<<<<<< Updated upstream
-    const pagamento = metodo === 'pix'
-      ? 'Pix'
-      : metodo === 'card' ? 'Cartão' : 'Transferência / Boleto';
-
-    const pagamentosLocais = this.lerMapaLocal<any>(this.PAGAMENTOS_STORAGE_KEY);
-    pagamentosLocais[String(id)] = {
-      ...(pagamentosLocais[String(id)] || {}),
-      paymentId,
-      checkoutUrl,
-      pagamento,
-    };
-    this.salvarMapaLocal(this.PAGAMENTOS_STORAGE_KEY, pagamentosLocais);
-
-    this.comissoesSubject.next(this.comissoesSubject.value.map(item =>
-      item.id === id
-        ? { ...item, paymentId, checkoutUrl, pagamento }
-        : item
-    ));
-=======
-    // O backend já gravou o checkout; a atualização da tela vem da releitura do banco.
+    // O backend persiste o checkout; a interface reflete a leitura atual do Supabase.
     await this.carregarComissoes();
->>>>>>> Stashed changes
   }
 
   async atualizarPagamento(
@@ -700,14 +639,7 @@ export class ArtistAreaService {
     _status: 'pendente' | 'pago' | 'falhou',
     _opcoes?: { paymentId?: string; metodo?: string; checkoutUrl?: string; reembolso?: boolean },
   ): Promise<void> {
-<<<<<<< Updated upstream
-    // O backend é responsável por persistir pagamentos e, quando aplicável,
-    // atualizar o pedido. Não duplicar a regra financeira nem simular status local.
-    void status;
-    void opcoes;
-=======
-    // Status de pagamento e pedido só são alterados pelo backend e recarregados do Supabase.
->>>>>>> Stashed changes
+    // O backend é responsável por persistir pagamentos e atualizar pedidos.
     await this.carregarComissoes();
   }
 
@@ -764,62 +696,6 @@ export class ArtistAreaService {
         : 'Não foi possível confirmar a entrega no backend.';
       return false;
     }
-<<<<<<< Updated upstream
-  }
-
-  async aprovarEntregaCliente(id: number): Promise<boolean> {
-    return this.atualizarStatus(id, 'Finalizada');
-  }
-
-  async recusarEntregaCliente(id: number): Promise<boolean> {
-    return this.atualizarStatus(id, 'Recusada');
-=======
-
-    const listaArquivos: ArquivoEntregaComissao[] =
-      arquivosExtras && arquivosExtras.length > 0
-        ? arquivosExtras.map((arq, idx) => (idx === 0 ? { ...arq, url: urlFinal || arq.url } : arq))
-        : [{ nome: arquivoFile?.name || 'Arquivo da comissão', url: urlFinal, tipo: arquivoFile?.type }];
-
-    const comissaoAtual = this.obterComissao(id);
-    const refsCliente = (comissaoAtual?.referencias ?? []).filter(
-      (r) =>
-        typeof r === 'string' &&
-        !r.startsWith('ENTREGA_ARQUIVO::') &&
-        !r.startsWith('ENTREGA_OBS::') &&
-        !r.startsWith('ENTREGA_ARQUIVOS_JSON::'),
-    );
-    const referenciasComEntrega = [
-      ...refsCliente,
-      `ENTREGA_ARQUIVO::${urlFinal}`,
-      `ENTREGA_ARQUIVOS_JSON::${JSON.stringify(listaArquivos)}`,
-      ...(observacaoEntrega ? [`ENTREGA_OBS::${observacaoEntrega}`] : []),
-    ];
-
-    const { data, error } = await supabase
-      .from('pedidos_principal')
-      .update({
-        status_comissao: 'Entregue',
-        status_pedido: 'Entregue para Avaliação do Cliente',
-        referencias: referenciasComEntrega,
-      })
-      .eq('id_pedido', id)
-      .select('id_pedido, status_comissao')
-      .maybeSingle();
-    if (error || !data || data.status_comissao !== 'Entregue') {
-      console.error('O Supabase não confirmou o envio da entrega:', error);
-      return false;
-    }
-
-    const entregasLocais = this.lerMapaLocal<{
-      arquivoEntrega: string;
-      observacaoEntrega: string;
-      arquivosEntrega?: ArquivoEntregaComissao[];
-    }>(this.ENTREGAS_STORAGE_KEY);
-    entregasLocais[String(id)] = { arquivoEntrega: urlFinal, observacaoEntrega, arquivosEntrega: listaArquivos };
-    this.salvarMapaLocal(this.ENTREGAS_STORAGE_KEY, entregasLocais);
-
-    await this.carregarComissoes();
-    return true;
   }
 
   async aprovarEntregaCliente(id: number): Promise<boolean> {
@@ -837,9 +713,7 @@ export class ArtistAreaService {
   }
 
   async recusarEntregaCliente(id: number): Promise<boolean> {
-    const ok = await this.atualizarStatus(id, 'Recusada');
-    return ok;
->>>>>>> Stashed changes
+    return this.atualizarStatus(id, 'Recusada');
   }
 
   async solicitarRevisaoEntrega(id: number): Promise<boolean> {

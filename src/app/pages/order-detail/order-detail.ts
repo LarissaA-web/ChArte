@@ -1046,14 +1046,7 @@ export class OrderDetail implements OnInit, OnDestroy {
       await this.artistData.recarregarComissoes();
       const comissaoAtualizada = this.artistData.obterComissao(pedidoId);
       const compraDireta = ehCompraDiretaArte(comissaoAtualizada ?? this.pedido);
-<<<<<<< Updated upstream
       if (comissaoAtualizada) this.pedido = { ...comissaoAtualizada };
-=======
-      if (comissaoAtualizada) {
-        // Exibe o pedido retornado pela releitura do Supabase, sem inferir status no navegador.
-        this.pedido = { ...comissaoAtualizada };
-      }
->>>>>>> Stashed changes
       await this.carregarHistoricoPedido(pedidoId);
 
       const pagamentoConfirmadoNoBanco = comissaoAtualizada?.pagamentoStatus === 'pago';

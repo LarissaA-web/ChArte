@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, from, firstValueFrom } from 'rxjs';
+import { AuthService } from './auth.service';
+import { supabase } from '../app/core/supabase/supabase.client';
 
 export const PAYMENT_API_BASE_URL = '/api/payments';
 
@@ -46,7 +48,6 @@ export interface FinanceSummary {
 
 @Injectable({ providedIn: 'root' })
 export class PaymentService {
-<<<<<<< Updated upstream
   private backendIndisponivelAte = 0;
 
   constructor(
@@ -61,9 +62,6 @@ export class PaymentService {
   private marcarBackendIndisponivel(): void {
     this.backendIndisponivelAte = Date.now() + 60_000;
   }
-=======
-  constructor(private http: HttpClient) {}
->>>>>>> Stashed changes
 
   criarCheckout(dados: CheckoutRequest): Observable<CheckoutResponse> {
     return from(this.iniciarCheckout(dados.orderId, dados.method).then((view) => ({
@@ -78,7 +76,6 @@ export class PaymentService {
     })));
   }
 
-<<<<<<< Updated upstream
   async iniciarCheckout(orderId: number, method: MetodoPagamentoInput): Promise<PaymentView> {
     try {
       return await firstValueFrom(this.http.post<PaymentView>(`${PAYMENT_API_BASE_URL}/checkout`, {
@@ -221,47 +218,10 @@ export class PaymentService {
     if (!uid) return [];
     const remotas = await this.listarVendasArtistaSupabase(uid);
     return remotas;
-=======
-  iniciarCheckout(orderId: number, method: MetodoPagamentoInput): Promise<PaymentView> {
-    return firstValueFrom(this.http.post<PaymentView>(`${PAYMENT_API_BASE_URL}/checkout`, {
-      orderId, method: this.normalizarMetodoApi(method),
-    }));
-  }
-
-  processarPagamentoSimulado(paymentId: string, payload: ProcessarPagamentoPayload, _orderIdFallback?: number): Promise<PaymentView> {
-    return firstValueFrom(this.http.post<PaymentView>(
-      `${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}/process`,
-      { ...payload, method: this.normalizarMetodoApi(payload.method) },
-    ));
-  }
-
-  cancelarPagamento(paymentId: string, _orderIdFallback?: number): Promise<PaymentView> {
-    return firstValueFrom(this.http.post<PaymentView>(`${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}/cancel`, {}));
-  }
-
-  reembolsarPagamento(paymentId: string, _orderIdFallback?: number): Promise<PaymentView> {
-    return firstValueFrom(this.http.post<PaymentView>(`${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}/refund`, {}));
-  }
-
-  buscarPorPaymentId(paymentId: string): Promise<PaymentView> {
-    return firstValueFrom(this.http.get<PaymentView>(`${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}`));
-  }
-
-  listarHistoricoPorPedido(orderId: number): Promise<PaymentView[]> {
-    return firstValueFrom(this.http.get<PaymentView[]>(`${PAYMENT_API_BASE_URL}/orders/${orderId}/history`));
-  }
-
-  listarHistoricoCliente(): Promise<PaymentView[]> {
-    return firstValueFrom(this.http.get<PaymentView[]>(`${PAYMENT_API_BASE_URL}/history/customer`));
-  }
-
-  listarVendasArtista(): Promise<PaymentView[]> {
-    return firstValueFrom(this.http.get<PaymentView[]>(`${PAYMENT_API_BASE_URL}/history/artist`));
   }
 
   obterResumoFinanceiro(): Promise<FinanceSummary> {
     return firstValueFrom(this.http.get<FinanceSummary>('/api/artist/finance/summary'));
->>>>>>> Stashed changes
   }
 
   gerarCodigoPixSimulado(orderId: number, paymentId: string, valor: number): string {
@@ -282,7 +242,6 @@ export class PaymentService {
     if (norm.includes('transfer') || norm.includes('boleto')) return 'Transferencia';
     return 'PIX';
   }
-<<<<<<< Updated upstream
 
   private isBusinessError(err: any): boolean {
     const status = Number(err?.status || 0);
@@ -474,6 +433,4 @@ export class PaymentService {
         return 'Aguardando confirmação do pagamento simulado.';
     }
   }
-=======
->>>>>>> Stashed changes
 }

@@ -19,11 +19,7 @@
     </header>
 
     @if (secaoAtual === 'dashboard') {
-<<<<<<< Updated upstream
       <app-artist-dashboard [totalObras]="artes.length" [avaliacao]="avaliacaoMedia" [totalAvaliacoes]="totalAvaliacoes" [dados]="dashboardData" [resumoFinanceiro]="resumoFinanceiro" [movimentacoesFinanceiras]="movimentacoesFinanceiras" [carregandoFinanceiro]="carregandoFinanceiro" [erroFinanceiro]="erroFinanceiro" [carregandoMovimentacoes]="carregandoMovimentacoes" [erroMovimentacoes]="erroMovimentacoes" [totalMovimentacoesFinanceiras]="totalMovimentacoesFinanceiras" [paginaMovimentacoesFinanceiras]="paginaMovimentacoesFinanceiras" (atualizarFinanceiro)="carregarDashboardFinanceiro()" (mudarPaginaMovimentacoes)="mudarPaginaMovimentacoes($event)" (selecionarStatus)="filtrarPeloDashboard($event)" />
-=======
-      <app-artist-dashboard [totalObras]="artes.length" [avaliacao]="avaliacaoMedia" [dados]="dashboardData" [financeLoading]="carregandoResumoFinanceiro" [financeError]="erroResumoFinanceiro" (selecionarStatus)="filtrarPeloDashboard($event)" />
->>>>>>> Stashed changes
       <section class="area-section activity-section"><header class="section-heading"><div><h2>Atividade recente</h2><p>Acompanhe as movimentações das suas comissões.</p></div></header>
         <div class="commission-list">
           @for (comissao of atividades; track comissao.id) {
