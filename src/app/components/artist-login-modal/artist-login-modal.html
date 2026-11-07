@@ -45,7 +45,7 @@
           }
 
           <div class="logar">
-            <a href="#" (click)="$event.preventDefault(); abrirRecuperacao()">Esqueci minha senha</a>
+            <a routerLink="/esqueci-senha" (click)="modal.closeModal()">Esqueci minha senha</a>
 
             <div class="buttonbox">
               <input type="submit" [value]="carregando ? 'Entrando...' : 'Logar'" id="login" [disabled]="carregando" />

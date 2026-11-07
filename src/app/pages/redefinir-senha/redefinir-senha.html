@@ -1,0 +1,66 @@
+<main class="recovery-page">
+  <section class="recovery-panel" aria-labelledby="recovery-title">
+    <a class="recovery-brand" routerLink="/">ChArte</a>
+
+    @if (carregandoValidacao) {
+      <div class="recovery-state" role="status" aria-live="polite">
+        <span class="recovery-spinner" aria-hidden="true"></span>
+        <h1 id="recovery-title">Validando link...</h1>
+        <p>Aguarde enquanto confirmamos sua solicitação.</p>
+      </div>
+    } @else if (sucesso) {
+      <div class="recovery-state">
+        <span class="recovery-eyebrow">Senha atualizada</span>
+        <h1 id="recovery-title">Tudo certo!</h1>
+        <p>Sua senha foi redefinida. Agora você pode entrar com a nova senha.</p>
+        <button class="recovery-button" type="button" (click)="voltarAoLogin()">Voltar ao login</button>
+      </div>
+    } @else if (contextoValido) {
+      <header class="recovery-header">
+        <span class="recovery-eyebrow">Recuperação de conta</span>
+        <h1 id="recovery-title">Crie uma nova senha</h1>
+        <p>Escolha uma senha nova para acessar sua conta ChArte.</p>
+      </header>
+
+      <form class="recovery-form" (ngSubmit)="redefinir()" [attr.aria-busy]="enviando">
+        <label class="recovery-field">
+          <span>Nova senha</span>
+          <input
+            type="password"
+            name="novaSenha"
+            [(ngModel)]="novaSenha"
+            autocomplete="new-password"
+            required
+            minlength="6"
+            placeholder="Mínimo de 6 caracteres"
+            [disabled]="enviando"
+          />
+        </label>
+        <label class="recovery-field">
+          <span>Confirmar nova senha</span>
+          <input
+            type="password"
+            name="confirmarSenha"
+            [(ngModel)]="confirmarSenha"
+            autocomplete="new-password"
+            required
+            minlength="6"
+            placeholder="Digite a senha novamente"
+            [disabled]="enviando"
+          />
+        </label>
+        @if (erro) { <p class="recovery-error" role="alert">{{ erro }}</p> }
+        <button class="recovery-button" type="submit" [disabled]="enviando">
+          {{ enviando ? 'Redefinindo...' : 'Redefinir senha' }}
+        </button>
+      </form>
+    } @else {
+      <div class="recovery-state">
+        <span class="recovery-eyebrow">Link indisponível</span>
+        <h1 id="recovery-title">Não foi possível validar</h1>
+        <p class="recovery-error" role="alert">{{ erro }}</p>
+        <a class="recovery-button recovery-button--link" routerLink="/esqueci-senha">Solicitar outro e-mail</a>
+      </div>
+    }
+  </section>
+</main>

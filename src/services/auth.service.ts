@@ -189,7 +189,7 @@ export class AuthService {
         });
       }
 
-      const { data, error } = await supabase.auth.getSession();
+      const { data, error } = await this.comTimeout(supabase.auth.getSession(), 10000);
 
       if (error) {
         console.error('Erro ao recuperar a sessão:', error.message);
@@ -200,11 +200,26 @@ export class AuthService {
           await supabase.auth.signOut({ scope: 'local' });
         } else if (!(await this.sessaoDeRecuperacaoValida(data.session.user.id))) {
           this.emailUsuarioLogado = data.session.user.email ?? '';
-          await this.carregarPerfilESessao(data.session.user);
+          await this.comTimeout(this.carregarPerfilESessao(data.session.user), 10000);
         }
       }
-    } catch (erro) {
-      console.error('Erro ao inicializar autenticação:', erro);
+    } catch {
+      // A inicialização termina mesmo se a validação de sessão ou perfil não responder.
+      console.error('Não foi possível concluir a inicialização da autenticação.');
+    }
+  }
+
+  private async comTimeout<T>(operacao: PromiseLike<T>, limiteMs: number): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        Promise.resolve(operacao),
+        new Promise<T>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('auth_timeout')), limiteMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 
@@ -219,9 +234,10 @@ export class AuthService {
     }
     try {
       const redirectTo = `${window.location.origin}/redefinir-senha`;
-      const { error } = await supabase.auth.resetPasswordForEmail(emailNormalizado, {
-        redirectTo,
-      });
+      const { error } = await this.comTimeout(
+        supabase.auth.resetPasswordForEmail(emailNormalizado, { redirectTo }),
+        15000,
+      );
       if (!error) return { status: 'sent' };
       if (error.status === 429 || CODE_RATE_LIMIT.includes(error.code ?? '')) {
         return { status: 'rate_limited' };
@@ -233,17 +249,31 @@ export class AuthService {
   }
 
   async validarFluxoRecuperacaoSenha(): Promise<boolean> {
-    await this.aguardarInicializacao();
-    const { data, error } = await supabase.auth.getSession();
-    const uid = data.session?.user.id;
-    if (error || !uid || this.recuperacaoConsumida(uid) || !(await this.sessaoDeRecuperacaoValida(uid))) return false;
-    return true;
+    try {
+      await this.comTimeout(this.aguardarInicializacao(), 10000);
+      const { data, error } = await this.comTimeout(supabase.auth.getSession(), 10000);
+      const uid = data.session?.user.id;
+      if (error || !uid || this.recuperacaoConsumida(uid) || !(await this.sessaoDeRecuperacaoValida(uid))) return false;
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async concluirRecuperacaoSenha(novaSenha: string): Promise<PasswordRecoveryResult> {
     if (novaSenha.length < 6) return { status: 'weak_password' };
-    await this.aguardarInicializacao();
-    const { data, error: sessionError } = await supabase.auth.getSession();
+    try {
+      await this.comTimeout(this.aguardarInicializacao(), 10000);
+    } catch {
+      return { status: 'invalid_flow' };
+    }
+    let data: Awaited<ReturnType<typeof supabase.auth.getSession>>['data'];
+    let sessionError: Awaited<ReturnType<typeof supabase.auth.getSession>>['error'];
+    try {
+      ({ data, error: sessionError } = await this.comTimeout(supabase.auth.getSession(), 10000));
+    } catch {
+      return { status: 'network_error' };
+    }
     const uid = data.session?.user.id;
     if (sessionError || !uid || this.recuperacaoConsumida(uid) || !(await this.sessaoDeRecuperacaoValida(uid))) {
       return { status: 'invalid_flow' };
@@ -252,14 +282,14 @@ export class AuthService {
     this.loginAttemptInProgress = true;
     let senhaAtualizada = false;
     try {
-      const { error } = await supabase.auth.updateUser({ password: novaSenha });
+      const { error } = await this.comTimeout(supabase.auth.updateUser({ password: novaSenha }), 15000);
       if (error) {
         if (error.code === 'weak_password') return { status: 'weak_password' };
         return this.ehFalhaDeConexao(error) ? { status: 'network_error' } : { status: 'error' };
       }
       senhaAtualizada = true;
       this.marcarRecuperacaoConsumida(uid);
-      try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* UID consumido continua bloqueado */ }
+      try { await this.comTimeout(supabase.auth.signOut({ scope: 'local' }), 8000); } catch { /* UID consumido continua bloqueado */ }
       return { status: 'success' };
     } catch (error) {
       return this.ehFalhaDeConexao(error) ? { status: 'network_error' } : { status: 'error' };
