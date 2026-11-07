@@ -1046,31 +1046,11 @@ export class OrderDetail implements OnInit, OnDestroy {
       await this.artistData.recarregarComissoes();
       const comissaoAtualizada = this.artistData.obterComissao(pedidoId);
       const compraDireta = ehCompraDiretaArte(comissaoAtualizada ?? this.pedido);
-      if (comissaoAtualizada) {
-        this.pedido = {
-          ...comissaoAtualizada,
-          pagamentoStatus: aprovado ? 'pago' : 'falhou',
-          status:
-            aprovado
-              ? compraDireta
-                ? 'Finalizada'
-                : comissaoAtualizada.status !== 'Entregue' &&
-                    comissaoAtualizada.status !== 'Finalizada'
-                  ? 'Em andamento'
-                  : comissaoAtualizada.status
-              : comissaoAtualizada.status,
-          pagamentoLiberado: aprovado && compraDireta ? true : comissaoAtualizada.pagamentoLiberado,
-          arquivoEntrega:
-            aprovado && compraDireta && !comissaoAtualizada.arquivoEntrega && comissaoAtualizada.referencias.length > 0
-              ? comissaoAtualizada.referencias[0]
-              : comissaoAtualizada.arquivoEntrega,
-          paymentId: resultado.paymentId || comissaoAtualizada.paymentId,
-          pagamento: resultado.method || comissaoAtualizada.pagamento,
-        };
-      }
+      if (comissaoAtualizada) this.pedido = { ...comissaoAtualizada };
       await this.carregarHistoricoPedido(pedidoId);
 
-      if (aprovado) {
+      const pagamentoConfirmadoNoBanco = comissaoAtualizada?.pagamentoStatus === 'pago';
+      if (aprovado && pagamentoConfirmadoNoBanco) {
         this.checkoutAtivo = false;
         this.pagamentoErro = false;
         this.pagamentoTitulo = 'Pagamento aprovado';
@@ -1085,10 +1065,10 @@ export class OrderDetail implements OnInit, OnDestroy {
       } else {
         this.checkoutAtivo = false;
         this.pagamentoErro = true;
-        this.pagamentoTitulo = 'Pagamento recusado na simulação';
-        this.pagamentoMensagem =
-          resultado.simulationDetails ||
-          'Pagamento recusado na simulação. Você pode iniciar uma nova tentativa.';
+        this.pagamentoTitulo = aprovado ? 'Pagamento ainda não confirmado' : 'Pagamento recusado na simulação';
+        this.pagamentoMensagem = aprovado
+          ? 'O processador aprovou a tentativa, mas o ChArte ainda não confirmou o pagamento salvo. Atualize o pedido antes de continuar.'
+          : resultado.simulationDetails || 'Pagamento recusado na simulação. Você pode iniciar uma nova tentativa.';
       }
     } catch (err: any) {
       this.definirErroPagamento(err, 'Ocorreu um erro ao processar a simulação de pagamento.');
@@ -1139,13 +1119,7 @@ export class OrderDetail implements OnInit, OnDestroy {
       await this.artistData.atualizarPagamento(pedidoId, 'falhou', { reembolso: true });
       await this.artistData.recarregarComissoes();
       const comissaoAtualizada = this.artistData.obterComissao(pedidoId);
-      if (comissaoAtualizada) {
-        this.pedido = {
-          ...comissaoAtualizada,
-          pagamentoStatus: 'falhou',
-          status: 'Pendente',
-        };
-      }
+      if (comissaoAtualizada) this.pedido = { ...comissaoAtualizada };
       await this.carregarHistoricoPedido(pedidoId);
       this.pagamentoErro = false;
       this.pagamentoMensagem = 'Reembolso simulado registrado com sucesso.';
@@ -1225,7 +1199,7 @@ export class OrderDetail implements OnInit, OnDestroy {
     try {
       const atualizado = await this.artistData.atualizarStatus(this.pedido.id, 'Pendente');
       if (!atualizado) {
-        this.statusMensagem = 'Não foi possível aprovar a proposta. Verifique sua conexão e tente novamente.';
+        this.statusMensagem = this.artistData.obterUltimoErroAtualizacao() || 'Não foi possível aprovar a proposta. Verifique sua conexão e tente novamente.';
         this.statusErro = true;
         return;
       }
@@ -1255,7 +1229,7 @@ export class OrderDetail implements OnInit, OnDestroy {
     try {
       const atualizado = await this.artistData.atualizarStatus(this.pedido.id, 'Cancelada');
       if (!atualizado) {
-        this.statusMensagem = 'Não foi possível cancelar o pedido.';
+        this.statusMensagem = this.artistData.obterUltimoErroAtualizacao() || 'Não foi possível cancelar o pedido.';
         this.statusErro = true;
         return;
       }
@@ -1285,14 +1259,14 @@ export class OrderDetail implements OnInit, OnDestroy {
     try {
       const ok = await this.artistData.aprovarEntregaCliente(this.pedido.id);
       if (!ok) {
-        this.statusMensagem = 'Não foi possível registrar a aprovação da entrega.';
+        this.statusMensagem = this.artistData.obterUltimoErroAtualizacao() || 'Não foi possível registrar a aprovação da entrega.';
         this.statusErro = true;
         return;
       }
 
       const comissao = this.artistData.obterComissao(this.pedido.id);
       if (comissao) {
-        this.pedido = { ...comissao, status: 'Finalizada', pagamentoLiberado: true };
+        this.pedido = { ...comissao };
       }
       this.statusMensagem = `Comissão finalizada! Pagamento liberado para o artista.`;
       await this.atualizarElegibilidadeAvaliacao(this.pedido.id);
@@ -1335,14 +1309,14 @@ export class OrderDetail implements OnInit, OnDestroy {
     try {
       const ok = await this.artistData.recusarEntregaCliente(this.pedido.id);
       if (!ok) {
-        this.statusMensagem = 'Não foi possível recusar a entrega no momento.';
+        this.statusMensagem = this.artistData.obterUltimoErroAtualizacao() || 'Não foi possível recusar a entrega no momento.';
         this.statusErro = true;
         return;
       }
 
       const comissao = this.artistData.obterComissao(this.pedido.id);
       if (comissao) {
-        this.pedido = { ...comissao, status: 'Recusada', pagamentoLiberado: true };
+        this.pedido = { ...comissao };
       }
       this.statusMensagem = `Entrega recusada. O artista recebeu 50% do pagamento (${this.repasseRecusa.valorLiquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`;
     } catch {
@@ -1372,7 +1346,7 @@ export class OrderDetail implements OnInit, OnDestroy {
 
       const comissao = this.artistData.obterComissao(this.pedido.id);
       if (comissao) {
-        this.pedido = { ...comissao, status: 'Em andamento' };
+        this.pedido = { ...comissao };
       }
       this.statusMensagem = 'Solicitação de ajustes enviada! O pedido voltou para produção.';
     } catch {

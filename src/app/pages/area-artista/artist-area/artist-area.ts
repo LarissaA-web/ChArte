@@ -320,29 +320,35 @@ export class ArtistArea implements OnInit, OnDestroy {
       ?? comissao.propostaPrazo
       ?? comissao.prazo;
 
-    await this.artistData.enviarProposta(
+    const ok = await this.artistData.enviarProposta(
       comissao.id,
       Number(valor),
       prazo
     );
+    if (!ok) window.alert(this.artistData.obterUltimoErroAtualizacao() || 'Não foi possível salvar a proposta.');
     this.cdr.detectChanges();
   }
-  recusar(comissao: Comissao): void {
+  async recusar(comissao: Comissao): Promise<void> {
     if (window.confirm(`Recusar a solicitação “${comissao.titulo}” de ${comissao.cliente.nome}?`)) {
-      void this.artistData.atualizarStatus(comissao.id, 'Recusada').then(() => this.cdr.detectChanges());
+      const ok = await this.artistData.atualizarStatus(comissao.id, 'Recusada');
+      if (!ok) window.alert(this.artistData.obterUltimoErroAtualizacao() || 'Não foi possível atualizar o pedido.');
+      this.cdr.detectChanges();
     }
   }
-  iniciar(comissao: Comissao): void {
-    void this.artistData.atualizarStatus(comissao.id, 'Em andamento').then(() => this.cdr.detectChanges());
+  async iniciar(comissao: Comissao): Promise<void> {
+    const ok = await this.artistData.atualizarStatus(comissao.id, 'Em andamento');
+    if (!ok) window.alert(this.artistData.obterUltimoErroAtualizacao() || 'Não foi possível atualizar o pedido.');
+    this.cdr.detectChanges();
   }
   abrirDetalhesComissao(comissao: Comissao): void {
     this.comissaoSelecionada = comissao;
     this.cdr.detectChanges();
   }
-  iniciarComissaoSelecionada(): void {
+  async iniciarComissaoSelecionada(): Promise<void> {
     if (!this.comissaoSelecionada || this.comissaoSelecionada.pagamentoStatus !== 'pago') return;
-    this.iniciar(this.comissaoSelecionada);
-    this.comissaoSelecionada = this.artistData.obterComissao(this.comissaoSelecionada.id) ?? null;
+    const selecionada = this.comissaoSelecionada;
+    await this.iniciar(selecionada);
+    this.comissaoSelecionada = this.artistData.obterComissao(selecionada.id) ?? null;
     this.cdr.detectChanges();
   }
   enviarComissaoSelecionada(): void {
@@ -359,8 +365,10 @@ export class ArtistArea implements OnInit, OnDestroy {
     this.abrirEntrega(comissao);
     this.cdr.detectChanges();
   }
-  finalizar(comissao: Comissao): void {
-    void this.artistData.atualizarStatus(comissao.id, 'Finalizada').then(() => this.cdr.detectChanges());
+  async finalizar(comissao: Comissao): Promise<void> {
+    const ok = await this.artistData.atualizarStatus(comissao.id, 'Finalizada');
+    if (!ok) window.alert(this.artistData.obterUltimoErroAtualizacao() || 'Não foi possível atualizar o pedido.');
+    this.cdr.detectChanges();
   }
 
   abrirEntrega(comissao: Comissao, abrirSeletorArquivos = false): void {
@@ -445,12 +453,16 @@ export class ArtistArea implements OnInit, OnDestroy {
     this.erroEntrega = '';
     this.cdr.detectChanges();
     try {
-      await this.artistData.registrarEntrega(
+      const ok = await this.artistData.registrarEntrega(
         pedidoId,
         arquivo,
         this.observacaoEntrega.trim(),
       );
-      this.sucessoEntrega = true;
+      if (!ok) {
+        this.erroEntrega = this.artistData.obterUltimoErroAtualizacao() || 'O backend não confirmou a entrega. Tente novamente.';
+      } else {
+        this.sucessoEntrega = true;
+      }
     } catch (error) {
       this.erroEntrega = error instanceof Error
         ? error.message
