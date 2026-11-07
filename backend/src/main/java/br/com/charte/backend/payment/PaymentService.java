@@ -102,7 +102,8 @@ public class PaymentService {
             Long paymentId,
             Long clientId,
             Long artistId,
-            BigDecimal amount
+            BigDecimal amount,
+            BigDecimal artistAmount
     ) {}
 
     @Transactional
@@ -113,12 +114,17 @@ public class PaymentService {
         Long userId = findUserIdByAuthId(authId);
         OrderRow order = findOrderForClientOrThrow(request.orderId(), userId);
 
-        ReentrantLock checkoutLock = CHECKOUT_LOCKS.computeIfAbsent(order.idPedido(), ignored -> new ReentrantLock());
-        checkoutLock.lock();
+        ReentrantLock processLock = CHECKOUT_LOCKS.computeIfAbsent(order.idPedido(), ignored -> new ReentrantLock());
+        processLock.lock();
         try {
+            // The DB lock makes idempotency reliable across Render instances and restarts.
+            if (jdbcTemplate.getDataSource() != null) {
+                jdbcTemplate.execute("SELECT pg_advisory_xact_lock(" + (7_300_000_000L + order.idPedido()) + ")");
+            }
             return checkoutLocked(request, order);
         } finally {
-            checkoutLock.unlock();
+            processLock.unlock();
+            if (!processLock.hasQueuedThreads()) CHECKOUT_LOCKS.remove(order.idPedido(), processLock);
         }
     }
 
@@ -228,10 +234,21 @@ public class PaymentService {
         PaymentStatus finalStatus = result.status();
 
         updatePaymentStatusInDb(paymentId, finalStatus);
-        updateOrderStateAfterPayment(order.idPedido(), order.statusComissao(), finalStatus);
+        updateOrderStateAfterPayment(order, finalStatus);
+        if (finalStatus.isApproved() && isReadyArtAcquisition(order)) {
+            ensureArtistReleaseMovement(findPaymentAccountingRowForUpdate(paymentId));
+        }
 
         OrderRow updatedOrder = findOrderByIdOrThrow(order.idPedido());
         PaymentView updatedPayment = findByPaymentIdInternal(paymentId);
+        if (parseStatusSafe(updatedPayment.status()) != finalStatus) {
+            throw new DataAccessResourceFailureException("O Supabase não confirmou o status final do pagamento.");
+        }
+        if (finalStatus.isApproved() && !"Entregue".equalsIgnoreCase(updatedOrder.statusPedido())
+                && !"Finalizada".equalsIgnoreCase(updatedOrder.statusComissao())
+                && !"Em andamento".equalsIgnoreCase(updatedOrder.statusComissao())) {
+            throw new DataAccessResourceFailureException("O Supabase não confirmou a transição do pedido após o pagamento.");
+        }
         return new PaymentView(
                 updatedPayment.paymentId(),
                 updatedPayment.orderId(),
@@ -281,7 +298,10 @@ public class PaymentService {
 
         PaymentStatus updated = paymentProvider.simulateStatus(paymentId, PaymentStatus.REFUNDED);
         updatePaymentStatusInDb(paymentId, updated);
-        updateOrderStateAfterPayment(order.idPedido(), order.statusComissao(), updated);
+        updateOrderStateAfterPayment(order, updated);
+        if (updated.isApproved() && isReadyArtAcquisition(order)) {
+            ensureArtistReleaseMovement(findPaymentAccountingRowForUpdate(paymentId));
+        }
 
         OrderRow updatedOrder = findOrderByIdOrThrow(order.idPedido());
         return enrichWithOrderDetails(findByPaymentIdInternal(paymentId), updatedOrder);
@@ -447,7 +467,7 @@ public class PaymentService {
 
         PaymentStatus updated = paymentProvider.simulateStatus(paymentId, status);
         updatePaymentStatusInDb(paymentId, updated);
-        updateOrderStateAfterPayment(order.idPedido(), order.statusComissao(), updated);
+        updateOrderStateAfterPayment(order, updated);
 
         OrderRow updatedOrder = findOrderByIdOrThrow(order.idPedido());
         return enrichWithOrderDetails(findByPaymentIdInternal(paymentId), updatedOrder);
@@ -578,7 +598,7 @@ public class PaymentService {
         try {
             return jdbcTemplate.queryForObject(
                     """
-                    SELECT id_pagamento, id_cliente, id_artista, valor
+                    SELECT id_pagamento, id_cliente, id_artista, valor, valor_artista
                     FROM public.pagamentos
                     WHERE gateway_payment_id = ?
                     FOR UPDATE
@@ -587,7 +607,8 @@ public class PaymentService {
                             rs.getLong("id_pagamento"),
                             rs.getLong("id_cliente"),
                             rs.getLong("id_artista"),
-                            rs.getBigDecimal("valor")
+                            rs.getBigDecimal("valor"),
+                            rs.getBigDecimal("valor_artista")
                     ),
                     paymentId
             );
@@ -630,24 +651,47 @@ public class PaymentService {
         }
     }
 
+    private void ensureArtistReleaseMovement(PaymentAccountingRow payment) {
+        Integer existing = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.movimentacoes_financeiras WHERE id_pagamento = ? AND tipo_movimentacao = 'liberacao_artista'",
+                Integer.class, payment.paymentId());
+        if (existing != null && existing > 0) return;
+        if (payment.artistAmount() == null || payment.artistAmount().signum() <= 0) {
+            throw new DataAccessResourceFailureException("O valor líquido do artista não foi confirmado para liberação.");
+        }
+        requireSingleUpdatedRow(jdbcTemplate.update(
+                """
+                INSERT INTO public.movimentacoes_financeiras
+                    (id_pagamento, id_cliente, id_artista, tipo_movimentacao, valor, descricao)
+                VALUES (?, ?, ?, 'liberacao_artista', ?, ?)
+                """,
+                payment.paymentId(), payment.clientId(), payment.artistId(), payment.artistAmount(),
+                "Valor líquido liberado após a compra de obra pronta"), "liberação da venda de obra pronta");
+    }
+
+    private boolean isReadyArtAcquisition(OrderRow order) {
+        return order.titulo() != null && order.titulo().startsWith("Aquisição:");
+    }
+
     private void requireSingleUpdatedRow(int updatedRows, String operation) {
         if (updatedRows != 1) {
             throw new DataAccessResourceFailureException("O Supabase não confirmou a " + operation + ".");
         }
     }
 
-    private void updateOrderStateAfterPayment(Long orderId, String currentOrderStatus, PaymentStatus paymentStatus) {
-        boolean alreadyDelivered = "Entregue".equalsIgnoreCase(currentOrderStatus)
-                || "Finalizada".equalsIgnoreCase(currentOrderStatus);
+    private void updateOrderStateAfterPayment(OrderRow order, PaymentStatus paymentStatus) {
+        boolean alreadyDelivered = "Entregue".equalsIgnoreCase(order.statusComissao())
+                || "Finalizada".equalsIgnoreCase(order.statusComissao());
         if (paymentStatus.isApproved() && !alreadyDelivered) {
-            requireSingleUpdatedRow(jdbcTemplate.update(
-                    "UPDATE public.pedidos_principal SET status_comissao = 'Em andamento', status_pedido = 'Em Produção' WHERE id_pedido = ?",
-                    orderId
-            ), "atualização do pedido");
-        } else if (paymentStatus == PaymentStatus.REFUNDED && !"Cancelada".equalsIgnoreCase(currentOrderStatus)) {
+            boolean readyArtAcquisition = order.titulo() != null && order.titulo().startsWith("Aquisição:");
+            String sql = readyArtAcquisition
+                    ? "UPDATE public.pedidos_principal SET status_comissao = 'Finalizada', status_pedido = 'Entregue', concluida_em = COALESCE(concluida_em, CURRENT_TIMESTAMP) WHERE id_pedido = ?"
+                    : "UPDATE public.pedidos_principal SET status_comissao = 'Em andamento', status_pedido = 'Em Produção' WHERE id_pedido = ?";
+            requireSingleUpdatedRow(jdbcTemplate.update(sql, order.idPedido()), "atualização do pedido");
+        } else if (paymentStatus == PaymentStatus.REFUNDED && !"Cancelada".equalsIgnoreCase(order.statusComissao())) {
             requireSingleUpdatedRow(jdbcTemplate.update(
                     "UPDATE public.pedidos_principal SET status_comissao = 'Cancelada', status_pedido = 'Cancelado' WHERE id_pedido = ?",
-                    orderId
+                    order.idPedido()
             ), "atualização do pedido");
         }
     }

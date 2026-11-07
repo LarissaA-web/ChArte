@@ -9,8 +9,12 @@ import { ArtistAreaService } from '../../../../services/artist-area.service';
 import { PerfilService } from '../../../../services/perfil.service';
 import { ModalService } from '../../../../services/modal.service';
 import { PinService } from '../../../../services/pinService';
+<<<<<<< Updated upstream
 import { PaymentService, PaymentView } from '../../../../services/payment.service';
 import { ArtistFinanceMovement, ArtistFinanceService, ArtistFinanceSummary } from '../../../../services/artist-finance.service';
+=======
+import { FinanceSummary, PaymentService, PaymentView } from '../../../../services/payment.service';
+>>>>>>> Stashed changes
 import {
   AvaliacaoArtista,
   CalculoRepasseArtista,
@@ -85,6 +89,7 @@ export class ArtistArea implements OnInit, OnDestroy {
 
   vendasArtista: PaymentView[] = [];
   carregandoVendas = false;
+<<<<<<< Updated upstream
   resumoFinanceiro: ArtistFinanceSummary | null = null;
   movimentacoesFinanceiras: ArtistFinanceMovement[] = [];
   totalMovimentacoesFinanceiras = 0;
@@ -93,6 +98,11 @@ export class ArtistArea implements OnInit, OnDestroy {
   carregandoMovimentacoes = false;
   erroFinanceiro = '';
   erroMovimentacoes = '';
+=======
+  resumoFinanceiro: FinanceSummary | null = null;
+  carregandoResumoFinanceiro = false;
+  erroResumoFinanceiro = '';
+>>>>>>> Stashed changes
   private subscriptions = new Subscription();
 
   constructor(
@@ -108,7 +118,11 @@ export class ArtistArea implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+<<<<<<< Updated upstream
     void this.carregarDashboardFinanceiro();
+=======
+    void this.carregarResumoFinanceiro();
+>>>>>>> Stashed changes
     this.subscriptions.add(
       this.artistData.comissoes$.subscribe(() => {
         if (this.comissaoSelecionada) {
@@ -181,7 +195,61 @@ export class ArtistArea implements OnInit, OnDestroy {
   }
   get totalAvaliacoes(): number { return this.avaliacoes.length || Number(this.perfil?.totalReviews ?? 0); }
   get atividades(): Comissao[] { return [...this.comissoes].sort((a, b) => b.criadaEm.localeCompare(a.criadaEm)).slice(0, 5); }
-  get dashboardData() { return criarDadosDashboard(this.comissoes); }
+  get dashboardData() {
+    const base = criarDadosDashboard(this.comissoes);
+    const resumo = this.resumoFinanceiro;
+    if (!resumo) return base;
+    const agora = new Date();
+    const anoAtual = agora.getFullYear();
+    const mesAtual = `${anoAtual}-${String(agora.getMonth() + 1).padStart(2, '0')}`;
+    const serieMensalConfiavel = resumo.approvedPayments === 0 ||
+      (resumo.approvedPaymentsMissingMovements === 0 && resumo.monthlyRevenue.length > 0);
+    const porMes = new Map(resumo.monthlyRevenue.map((item) => [item.month, Number(item.artistNet ?? 0)]));
+    const series = serieMensalConfiavel
+      ? Array.from({ length: agora.getMonth() + 1 }, (_, index) => {
+          const month = `${anoAtual}-${String(index + 1).padStart(2, '0')}`;
+          return {
+            periodo: month,
+            rotulo: new Intl.DateTimeFormat('pt-BR', { month: 'short', timeZone: 'UTC' })
+              .format(new Date(`${month}-01T00:00:00Z`)).replace('.', ''),
+            valor: porMes.get(month) ?? 0,
+          };
+        })
+      : [];
+    return {
+      ...base,
+      metricas: {
+        ...base.metricas,
+        ganhos: resumo.approvedPayments === 0
+          ? 0
+          : !serieMensalConfiavel
+            ? null
+            : Number(porMes.get(mesAtual) ?? 0),
+        receitaTotal: Number(resumo.artistNet ?? 0),
+        receitaBruta: resumo.grossRevenue,
+        receitaLiquida: resumo.artistNet,
+        totalVendas: Number(resumo.approvedPayments ?? 0),
+        pendentes: Number(resumo.pendingOrders ?? 0),
+        andamento: Number(resumo.productionOrders ?? 0),
+        finalizadas: Number(resumo.completedOrders ?? 0),
+      },
+      ganhosPorMes: series,
+    };
+  }
+
+  private async carregarResumoFinanceiro(): Promise<void> {
+    this.carregandoResumoFinanceiro = true;
+    this.erroResumoFinanceiro = '';
+    try {
+      this.resumoFinanceiro = await this.paymentService.obterResumoFinanceiro();
+    } catch (error: any) {
+      this.resumoFinanceiro = null;
+      this.erroResumoFinanceiro = error?.error?.message || 'Não foi possível carregar os dados financeiros.';
+    } finally {
+      this.carregandoResumoFinanceiro = false;
+      this.cdr.detectChanges();
+    }
+  }
 
   filtrarPeloDashboard(status: StatusComissao): void {
     if (status === 'Finalizada' || status === 'Cancelada' || status === 'Recusada') {

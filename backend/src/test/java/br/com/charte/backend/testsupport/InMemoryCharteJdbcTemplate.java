@@ -142,6 +142,10 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
         return (int) movements.stream().filter(m -> "credito_retido".equals(m.tipo)).count();
     }
 
+    public int countArtistReleaseMovements() {
+        return (int) movements.stream().filter(m -> "liberacao_artista".equals(m.tipo)).count();
+    }
+
     public MovementRow latestRetentionMovement() {
         return movements.stream().filter(m -> "credito_retido".equals(m.tipo)).reduce((first, second) -> second).orElse(null);
     }
@@ -220,7 +224,7 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
             movement.idPagamento = ((Number) args[0]).longValue();
             movement.idCliente = ((Number) args[1]).longValue();
             movement.idArtista = ((Number) args[2]).longValue();
-            movement.tipo = "credito_retido";
+            movement.tipo = normalized.contains("'LIBERACAO_ARTISTA'") ? "liberacao_artista" : "credito_retido";
             movement.valor = (BigDecimal) args[3];
             movement.descricao = (String) args[4];
             movements.add(movement);
@@ -229,12 +233,14 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
 
         if (normalized.startsWith("UPDATE PUBLIC.PEDIDOS_PRINCIPAL SET")) {
             Long orderId = ((Number) args[0]).longValue();
-            String nextStatus = normalized.contains("'EM ANDAMENTO'") ? "Em andamento" : "Cancelada";
+            String nextStatus = normalized.contains("'FINALIZADA'") ? "Finalizada"
+                    : normalized.contains("'EM ANDAMENTO'") ? "Em andamento" : "Cancelada";
             orders.stream()
                     .filter(o -> o.idPedido.equals(orderId))
                     .forEach(o -> {
                         o.statusComissao = nextStatus;
-                        o.statusPedido = "Em andamento".equals(nextStatus) ? "Em Produção" : "Cancelado";
+                        o.statusPedido = "Em andamento".equals(nextStatus) ? "Em Produção"
+                                : "Finalizada".equals(nextStatus) ? "Entregue" : "Cancelado";
                     });
             return 1;
         }
@@ -295,8 +301,9 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
 
         if (normalized.contains("FROM PUBLIC.MOVIMENTACOES_FINANCEIRAS") && normalized.contains("SELECT COUNT(*)")) {
             Long paymentId = ((Number) args[0]).longValue();
+            String type = normalized.contains("'LIBERACAO_ARTISTA'") ? "liberacao_artista" : "credito_retido";
             long count = movements.stream()
-                    .filter(m -> m.idPagamento.equals(paymentId) && "credito_retido".equals(m.tipo))
+                    .filter(m -> m.idPagamento.equals(paymentId) && type.equals(m.tipo))
                     .count();
             return requiredType.cast((int) count);
         }
@@ -367,7 +374,8 @@ public class InMemoryCharteJdbcTemplate extends JdbcTemplate {
                                 "id_pagamento", p.idPagamento,
                                 "id_cliente", p.idCliente,
                                 "id_artista", p.idArtista,
-                                "valor", p.valor
+                                "valor", p.valor,
+                                "valor_artista", p.valorArtista
                         )), 0));
                     }
                 }

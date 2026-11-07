@@ -147,6 +147,45 @@ class PaymentServiceSafetyTest {
     }
 
     @Test
+    void compraDeArteProntaFicaConcluidaNoRegistroPersistido() {
+        jdbcTemplate.addOrder(101L, 1L, 2L, new BigDecimal("50.00"), "Pendente", "Aquisição: Arte pronta");
+        PaymentService.PaymentView checkout = service.checkout(
+                new PaymentService.CheckoutRequest(101L, "PIX"), "auth_u1");
+
+        PaymentService.PaymentView processed = service.processSimulatedPayment(
+                checkout.paymentId(),
+                new PaymentService.ProcessPaymentRequest("PIX", null, null, null, 1, null, "APPROVED"),
+                "auth_u1");
+
+        assertEquals("Finalizada", processed.orderStatus());
+        assertEquals("Pago", jdbcTemplate.latestPayment().statusPagamento);
+        assertEquals(new BigDecimal("0.08"), jdbcTemplate.latestPayment().taxaPercentual);
+        assertEquals(new BigDecimal("4.00"), jdbcTemplate.latestPayment().taxaPlataforma);
+        assertEquals(new BigDecimal("46.00"), jdbcTemplate.latestPayment().valorArtista);
+        assertEquals(1, jdbcTemplate.countArtistReleaseMovements());
+        service.simulate(checkout.paymentId(), "APPROVED", "segredo-dev", "auth_u1");
+        assertEquals(1, jdbcTemplate.countArtistReleaseMovements());
+    }
+
+    @Test
+    void estadoPersistidoContinuaDisponivelAposRecriarServico() {
+        PaymentService.PaymentView checkout = service.checkout(
+                new PaymentService.CheckoutRequest(100L, "PIX"), "auth_u1");
+        service.processSimulatedPayment(
+                checkout.paymentId(),
+                new PaymentService.ProcessPaymentRequest("PIX", null, null, null, 1, null, "APPROVED"),
+                "auth_u1");
+
+        PaymentService restartedService = new PaymentService(
+                jdbcTemplate, new MockPaymentProvider("http://localhost:4200/checkout"), "segredo-dev");
+        PaymentService.PaymentView afterRestart = restartedService.findByPaymentId(checkout.paymentId(), "auth_u1");
+
+        assertEquals("APPROVED", afterRestart.status());
+        assertEquals("Pago", afterRestart.dbStatus());
+        assertEquals("Em andamento", afterRestart.orderStatus());
+    }
+
+    @Test
     void aprovacaoRepetidaRegistraUmaUnicaMovimentacaoDeRetencao() {
         PaymentService.PaymentView checkout = service.checkout(
                 new PaymentService.CheckoutRequest(100L, "PIX"), "auth_u1");

@@ -1,8 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, from, firstValueFrom } from 'rxjs';
-import { supabase } from '../app/core/supabase/supabase.client';
-import { AuthService } from './auth.service';
 
 export const PAYMENT_API_BASE_URL = '/api/payments';
 
@@ -15,61 +13,40 @@ export class PaymentApiError extends Error {
 
 export type MetodoPagamentoInput = 'pix' | 'card' | 'transfer' | 'PIX' | 'Cartao' | 'Transferencia';
 export type StatusPagamentoGateway =
-  | 'PENDING'
-  | 'PROCESSING'
-  | 'APPROVED'
-  | 'PAID'
-  | 'DECLINED'
-  | 'FAILED'
-  | 'CANCELLED'
-  | 'REFUNDED';
+  | 'PENDING' | 'PROCESSING' | 'APPROVED' | 'PAID' | 'DECLINED' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
 
-export interface CheckoutRequest {
-  orderId: number;
-  method: 'pix' | 'card' | 'transfer';
-}
-
-export interface CheckoutResponse {
-  paymentId: string;
-  checkoutUrl: string;
-  status: 'pending' | 'paid' | 'failed';
-  pixCode?: string | null;
-}
-
-export interface PaymentStatusResponse {
-  paymentId: string;
-  status: 'pending' | 'paid' | 'failed';
-}
-
+export interface CheckoutRequest { orderId: number; method: 'pix' | 'card' | 'transfer'; }
+export interface CheckoutResponse { paymentId: string; checkoutUrl: string; status: 'pending' | 'paid' | 'failed'; pixCode?: string | null; }
+export interface PaymentStatusResponse { paymentId: string; status: 'pending' | 'paid' | 'failed'; }
 export interface ProcessarPagamentoPayload {
-  method: 'pix' | 'card' | 'transfer';
-  cardHolderName?: string;
-  cardLast4?: string;
-  cardBrand?: string;
-  installments?: number;
-  pixCode?: string;
-  simulateOutcome?: 'APPROVED' | 'DECLINED';
+  method: 'pix' | 'card' | 'transfer'; cardHolderName?: string; cardLast4?: string;
+  cardBrand?: string; installments?: number; pixCode?: string; simulateOutcome?: 'APPROVED' | 'DECLINED';
 }
-
 export interface PaymentView {
-  paymentId: string;
-  orderId: number;
-  method: string;
-  status: StatusPagamentoGateway;
-  dbStatus?: 'Pendente' | 'Pago' | 'Cancelado' | 'Reembolso';
-  amount: number;
-  checkoutUrl: string;
-  pixCode?: string | null;
-  simulationDetails?: string | null;
-  paymentDate?: string | null;
-  orderStatus?: string | null;
-  orderTitle?: string | null;
-  clientName?: string | null;
-  artistName?: string | null;
+  paymentId: string; orderId: number; method: string; status: StatusPagamentoGateway;
+  dbStatus?: 'Pendente' | 'Pago' | 'Cancelado' | 'Reembolso'; amount: number; checkoutUrl: string;
+  pixCode?: string | null; simulationDetails?: string | null; paymentDate?: string | null;
+  orderStatus?: string | null; orderTitle?: string | null; clientName?: string | null; artistName?: string | null;
+}
+export interface FinanceSummary {
+  grossRevenue: number | null;
+  platformFees: number | null;
+  artistNet: number | null;
+  heldBalance: number;
+  availableBalance: number;
+  approvedPayments: number;
+  readyArtSales: number;
+  commissions: number;
+  pendingOrders: number;
+  productionOrders: number;
+  completedOrders: number;
+  approvedPaymentsMissingMovements: number;
+  monthlyRevenue: { month: string; gross: number; artistNet: number }[];
 }
 
 @Injectable({ providedIn: 'root' })
 export class PaymentService {
+<<<<<<< Updated upstream
   private backendIndisponivelAte = 0;
 
   constructor(
@@ -84,27 +61,24 @@ export class PaymentService {
   private marcarBackendIndisponivel(): void {
     this.backendIndisponivelAte = Date.now() + 60_000;
   }
+=======
+  constructor(private http: HttpClient) {}
+>>>>>>> Stashed changes
 
   criarCheckout(dados: CheckoutRequest): Observable<CheckoutResponse> {
-    return from(
-      this.iniciarCheckout(dados.orderId, dados.method).then((view) => ({
-        paymentId: view.paymentId,
-        checkoutUrl: view.checkoutUrl,
-        status: this.toLegacyStatus(view.status),
-        pixCode: view.pixCode,
-      })),
-    );
+    return from(this.iniciarCheckout(dados.orderId, dados.method).then((view) => ({
+      paymentId: view.paymentId, checkoutUrl: view.checkoutUrl,
+      status: this.toLegacyStatus(view.status), pixCode: view.pixCode,
+    })));
   }
 
   consultarStatus(paymentId: string): Observable<PaymentStatusResponse> {
-    return from(
-      this.buscarPorPaymentId(paymentId).then((view) => ({
-        paymentId: view.paymentId,
-        status: this.toLegacyStatus(view.status),
-      })),
-    );
+    return from(this.buscarPorPaymentId(paymentId).then((view) => ({
+      paymentId: view.paymentId, status: this.toLegacyStatus(view.status),
+    })));
   }
 
+<<<<<<< Updated upstream
   async iniciarCheckout(orderId: number, method: MetodoPagamentoInput): Promise<PaymentView> {
     try {
       return await firstValueFrom(this.http.post<PaymentView>(`${PAYMENT_API_BASE_URL}/checkout`, {
@@ -247,28 +221,58 @@ export class PaymentService {
     if (!uid) return [];
     const remotas = await this.listarVendasArtistaSupabase(uid);
     return remotas;
+=======
+  iniciarCheckout(orderId: number, method: MetodoPagamentoInput): Promise<PaymentView> {
+    return firstValueFrom(this.http.post<PaymentView>(`${PAYMENT_API_BASE_URL}/checkout`, {
+      orderId, method: this.normalizarMetodoApi(method),
+    }));
+  }
+
+  processarPagamentoSimulado(paymentId: string, payload: ProcessarPagamentoPayload, _orderIdFallback?: number): Promise<PaymentView> {
+    return firstValueFrom(this.http.post<PaymentView>(
+      `${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}/process`,
+      { ...payload, method: this.normalizarMetodoApi(payload.method) },
+    ));
+  }
+
+  cancelarPagamento(paymentId: string, _orderIdFallback?: number): Promise<PaymentView> {
+    return firstValueFrom(this.http.post<PaymentView>(`${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}/cancel`, {}));
+  }
+
+  reembolsarPagamento(paymentId: string, _orderIdFallback?: number): Promise<PaymentView> {
+    return firstValueFrom(this.http.post<PaymentView>(`${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}/refund`, {}));
+  }
+
+  buscarPorPaymentId(paymentId: string): Promise<PaymentView> {
+    return firstValueFrom(this.http.get<PaymentView>(`${PAYMENT_API_BASE_URL}/${encodeURIComponent(paymentId)}`));
+  }
+
+  listarHistoricoPorPedido(orderId: number): Promise<PaymentView[]> {
+    return firstValueFrom(this.http.get<PaymentView[]>(`${PAYMENT_API_BASE_URL}/orders/${orderId}/history`));
+  }
+
+  listarHistoricoCliente(): Promise<PaymentView[]> {
+    return firstValueFrom(this.http.get<PaymentView[]>(`${PAYMENT_API_BASE_URL}/history/customer`));
+  }
+
+  listarVendasArtista(): Promise<PaymentView[]> {
+    return firstValueFrom(this.http.get<PaymentView[]>(`${PAYMENT_API_BASE_URL}/history/artist`));
+  }
+
+  obterResumoFinanceiro(): Promise<FinanceSummary> {
+    return firstValueFrom(this.http.get<FinanceSummary>('/api/artist/finance/summary'));
+>>>>>>> Stashed changes
   }
 
   gerarCodigoPixSimulado(orderId: number, paymentId: string, valor: number): string {
-    const cleanId = (paymentId || '00000000')
-      .replace('pay_', '')
-      .replace('mock_', '')
-      .toUpperCase();
+    const cleanId = (paymentId || '00000000').replace('pay_', '').replace('mock_', '').toUpperCase();
     const shortHash = cleanId.slice(0, 8) || 'CHARTE01';
-    const valorFormatado = Number(valor || 0).toFixed(2);
-    return `00020126580014BR.GOV.BCB.PIX0136CHARTE-SIM-${orderId}-${shortHash}5204000053039865406${valorFormatado}5802BR5913CHARTE ARTES6009SAO PAULO62070503***6304${shortHash.slice(0, 4)}`;
+    return `00020126580014BR.GOV.BCB.PIX0136CHARTE-SIM-${orderId}-${shortHash}5204000053039865406${Number(valor || 0).toFixed(2)}5802BR5913CHARTE ARTES6009SAO PAULO62070503***6304${shortHash.slice(0, 4)}`;
   }
 
   private toLegacyStatus(status: StatusPagamentoGateway): 'pending' | 'paid' | 'failed' {
     if (status === 'APPROVED' || status === 'PAID') return 'paid';
-    if (
-      status === 'DECLINED' ||
-      status === 'FAILED' ||
-      status === 'CANCELLED' ||
-      status === 'REFUNDED'
-    ) {
-      return 'failed';
-    }
+    if (['DECLINED', 'FAILED', 'CANCELLED', 'REFUNDED'].includes(status)) return 'failed';
     return 'pending';
   }
 
@@ -278,6 +282,7 @@ export class PaymentService {
     if (norm.includes('transfer') || norm.includes('boleto')) return 'Transferencia';
     return 'PIX';
   }
+<<<<<<< Updated upstream
 
   private isBusinessError(err: any): boolean {
     const status = Number(err?.status || 0);
@@ -469,4 +474,6 @@ export class PaymentService {
         return 'Aguardando confirmação do pagamento simulado.';
     }
   }
+=======
+>>>>>>> Stashed changes
 }

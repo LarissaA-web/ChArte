@@ -1,4 +1,6 @@
 <section class="dashboard" aria-labelledby="dashboard-title">
+  @if (financeLoading) { <p role="status">Atualizando dados financeiros…</p> }
+  @if (financeError) { <p role="alert">{{ financeError }} Os valores financeiros serão exibidos quando o backend estiver disponível.</p> }
   <header class="dashboard-heading">
     <div><h2 id="dashboard-title">Visão geral</h2><p>Resumo financeiro e desempenho das suas comissões.</p></div>
     <span class="period-chip">{{ totalComissoes }} comissões no total</span>
@@ -42,6 +44,13 @@
   </section>
 
   <div class="metric-grid">
+<<<<<<< Updated upstream
+=======
+    <article class="metric-card"><span class="metric-icon">#</span><span class="metric-label">Vendas confirmadas</span><strong>{{ metricas.totalVendas ?? 0 }}</strong><small>pagamentos persistidos como pagos</small></article>
+    <article class="metric-card"><span class="metric-icon">R$</span><span class="metric-label">Receita bruta</span><strong>{{ metricas.receitaBruta == null ? '—' : (metricas.receitaBruta | currency:'BRL') }}</strong><small>valor total das vendas confirmadas</small></article>
+    <article class="metric-card"><span class="metric-icon">∑</span><span class="metric-label">Receita líquida</span><strong>{{ metricas.receitaLiquida == null ? '—' : (metricas.receitaLiquida | currency:'BRL') }}</strong><small>após a taxa de 8% da plataforma</small></article>
+    <article class="metric-card"><span class="metric-icon">R$</span><span class="metric-label">Ganhos deste mês</span><strong>{{ metricas.ganhos == null ? '—' : (metricas.ganhos | currency:'BRL') }}</strong><small>receita líquida registrada no mês</small></article>
+>>>>>>> Stashed changes
     <article class="metric-card"><span class="metric-icon">✦</span><span class="metric-label">Fluxo ativo</span><strong>{{ metricas.pendentes + metricas.andamento }}</strong><small>{{ metricas.pendentes }} aguardando · {{ metricas.andamento }} em produção/entrega</small></article>
     <article class="metric-card"><span class="metric-icon star-icon">★</span><span class="metric-label">Avaliação média</span><strong>{{ totalAvaliacoes ? (avaliacao | number:'1.1-1') : 'Sem avaliações' }}</strong><small>{{ totalAvaliacoes }} avaliações · {{ totalObras }} obras no portfólio</small></article>
   </div>
@@ -80,6 +89,7 @@
     </article>
 
     <article class="chart-card earnings-card">
+<<<<<<< Updated upstream
       <header><div><h3>Faturamento mensal</h3><p>Bruto de pagamentos aprovados, agrupado pela data da movimentação de retenção.</p></div>
         @if (resumoFinanceiro) { <strong>{{ resumoMaiorValor(faturamentoMensal) | currency:'BRL':'symbol':'1.0-0' }}<small>maior mês registrado</small></strong> }
       </header>
@@ -87,12 +97,21 @@
       @else if (erroFinanceiro) { <p class="chart-empty">O faturamento mensal não pôde ser carregado.</p> }
       @else if (resumoFinanceiro && existeFaturamentoMensal) {
         <svg class="line-chart" viewBox="0 0 720 210" role="img" aria-label="Faturamento bruto mensal baseado em pagamentos aprovados">
+=======
+      <header><div><h3>Receita líquida por mês</h3><p>Vendas confirmadas neste ano, após a taxa da plataforma</p></div><strong>{{ resumoMaiorValor(dados.ganhosPorMes) | currency:'BRL':'symbol':'1.0-0' }}<small>maior valor mensal</small></strong></header>
+      @if (existeGanhoNoPeriodo) {
+        <svg class="line-chart" viewBox="0 0 720 210" role="img" aria-label="Ganhos mensais com comissões finalizadas neste ano">
+>>>>>>> Stashed changes
           <g class="chart-grid-lines"><line x1="38" y1="50" x2="708" y2="50"/><line x1="38" y1="114" x2="708" y2="114"/><line x1="38" y1="178" x2="708" y2="178"/></g>
           <polyline class="income-line" [attr.points]="pontosLinha(faturamentoMensal)" />
           @for (ponto of linha(faturamentoMensal); track ponto.periodo) { <g><title>{{ ponto.periodo }}: {{ ponto.valor | currency:'BRL' }}</title><circle class="income-point" [attr.cx]="ponto.x" [attr.cy]="ponto.y" r="4"/><text class="axis-label" [attr.x]="ponto.x" y="202">{{ ponto.rotulo }}</text></g> }
         </svg>
+<<<<<<< Updated upstream
       } @else if (resumoFinanceiro) { <p class="chart-empty">Ainda não há movimentações datadas para compor o gráfico mensal.</p> }
       @else { <p class="chart-empty">Os dados mensais não estão disponíveis.</p> }
+=======
+      } @else { <p class="chart-empty">A receita aparecerá após pagamentos confirmados.</p> }
+>>>>>>> Stashed changes
     </article>
   </div>
 

@@ -9,8 +9,11 @@ export interface DashboardMetricas {
   semana: number;
   mes: number;
   ano: number;
-  ganhos: number;
+  ganhos: number | null;
   receitaTotal?: number;
+  totalVendas?: number;
+  receitaBruta?: number | null;
+  receitaLiquida?: number | null;
   pendentes: number;
   andamento: number;
   finalizadas: number;
@@ -90,6 +93,9 @@ export function criarDadosDashboard(comissoes: Comissao[], agora = new Date()): 
     receitaTotal: comissoes
       .filter((item) => comissaoGerouReceita(item))
       .reduce((total, item) => total + valorComissao(item), 0),
+    totalVendas: 0,
+    receitaBruta: 0,
+    receitaLiquida: 0,
     pendentes: comissoes.filter((item) => item.status === 'Pendente' || item.status === 'Solicitada' || item.status === 'Aguardando aprovação do cliente').length,
     andamento: comissoes.filter((item) => item.status === 'Em andamento' || item.status === 'Entregue').length,
     finalizadas: comissoes.filter((item) => item.status === 'Finalizada').length,

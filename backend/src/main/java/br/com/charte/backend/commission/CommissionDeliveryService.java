@@ -11,6 +11,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -130,6 +131,78 @@ public class CommissionDeliveryService {
 
         return new CommissionDeliveryApi.DeliveryResponse(orderId, "Entregue");
     }
+
+    @Transactional
+    public CommissionDeliveryApi.DeliveryResponse acceptDelivery(Long orderId, String authId) {
+        requireJdbcMode();
+        if (orderId == null || orderId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Número do pedido inválido");
+        }
+        var customer = authenticatedUserService.requireUserByAuthId(authId);
+        AcceptedPayment payment;
+        try {
+            payment = jdbcTemplate.queryForObject(
+                    """
+                    SELECT p.id_pedido, p.id_artista, p.status_comissao,
+                           pg.id_pagamento, pg.id_cliente, pg.valor_artista
+                    FROM public.pedidos_principal p
+                    JOIN public.pagamentos pg ON pg.id_pedido = p.id_pedido
+                    WHERE p.id_pedido = ? AND p.id_cliente = ?
+                      AND (CAST(pg.status_pagamento AS VARCHAR) = 'Pago'
+                           OR UPPER(COALESCE(pg.gateway_status, '')) IN ('APPROVED', 'PAID', 'SIMULATED_PAID'))
+                    ORDER BY pg.id_pagamento DESC
+                    LIMIT 1
+                    FOR UPDATE OF p, pg
+                    """,
+                    (rs, rowNum) -> new AcceptedPayment(rs.getLong("id_pedido"), rs.getLong("id_artista"),
+                            rs.getString("status_comissao"), rs.getLong("id_pagamento"),
+                            rs.getLong("id_cliente"), rs.getBigDecimal("valor_artista")),
+                    orderId, customer.idUsuario());
+        } catch (EmptyResultDataAccessException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Pedido pago não encontrado para esta conta.");
+        }
+        if (!"Entregue".equalsIgnoreCase(payment.orderStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "A comissão ainda não foi enviada para avaliação do cliente.");
+        }
+        if (payment.artistAmount() == null || payment.artistAmount().signum() <= 0) {
+            throw new DataAccessResourceFailureException("O valor líquido do artista não está persistido no pagamento.");
+        }
+
+        Integer existingRelease = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.movimentacoes_financeiras WHERE id_pagamento = ? AND tipo_movimentacao = 'liberacao_artista'",
+                Integer.class, payment.paymentId());
+        int updated = jdbcTemplate.update(
+                """
+                UPDATE public.pedidos_principal
+                SET status_comissao = 'Finalizada', status_pedido = 'Entregue',
+                    concluida_em = COALESCE(concluida_em, CURRENT_TIMESTAMP)
+                WHERE id_pedido = ? AND id_cliente = ? AND status_comissao = 'Entregue'
+                """,
+                orderId, customer.idUsuario());
+        if (updated != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "O pedido mudou. Atualize a página e tente novamente.");
+        }
+        if (existingRelease == null || existingRelease == 0) {
+            int inserted = jdbcTemplate.update(
+                    """
+                    INSERT INTO public.movimentacoes_financeiras
+                        (id_pagamento, id_cliente, id_artista, tipo_movimentacao, valor, descricao)
+                    VALUES (?, ?, ?, 'liberacao_artista', ?, ?)
+                    """,
+                    payment.paymentId(), payment.clientId(), payment.artistId(), payment.artistAmount(),
+                    "Valor líquido liberado após aprovação da entrega pelo cliente");
+            if (inserted != 1) {
+                throw new DataAccessResourceFailureException("O Supabase não confirmou a liberação do valor ao artista.");
+            }
+        }
+        return new CommissionDeliveryApi.DeliveryResponse(orderId, "Finalizada");
+    }
+
+    private record AcceptedPayment(Long orderId, Long artistId, String orderStatus,
+                                   Long paymentId, Long clientId, java.math.BigDecimal artistAmount) {}
 
     public CommissionDeliveryApi.DeliveryUrlResponse createDeliveryUrl(Long orderId, String authId, String accessToken) {
         requireJdbcMode();
