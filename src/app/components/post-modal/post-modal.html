@@ -60,10 +60,10 @@
         <div class="campo">
           <label for="categoria"> Categoria </label>
 
-          <select id="categoria" [(ngModel)]="categoria">
+          <select id="categoria" [(ngModel)]="categoria" [disabled]="carregandoCatalogos || !categorias.length">
             <option value="">Selecione uma categoria</option>
-            @for (item of categorias; track item.nome) {
-              <option [value]="item.nome">{{ item.nome }}</option>
+            @for (item of categorias; track item.id_categoria) {
+              <option [value]="item.nome_categoria">{{ item.nome_categoria }}</option>
             }
           </select>
         </div>
@@ -71,10 +71,10 @@
         <div class="campo">
           <label for="estilo"> Estilo </label>
 
-          <select id="estilo" [(ngModel)]="estilo">
+          <select id="estilo" [(ngModel)]="estilo" [disabled]="carregandoCatalogos || !estilos.length">
             <option value="">Selecione um estilo</option>
-            @for (item of estilos; track item.nome) {
-              <option [value]="item.nome">{{ item.nome }}</option>
+            @for (item of estilos; track item.id_estilo) {
+              <option [value]="item.nome_estilo">{{ item.nome_estilo }}</option>
             }
           </select>
         </div>
@@ -117,6 +117,7 @@
       </section>
     </div>
 
+    @if (erroCatalogo && !categorias.length || erroCatalogo && !estilos.length) { <p class="form-error" role="alert">{{ erroCatalogo }}</p> }
     @if (erro) { <p class="form-error" role="alert">{{ erro }}</p> }
 
     <!-- RODAPÉ -->

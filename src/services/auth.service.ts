@@ -86,9 +86,184 @@ export class AuthService {
   private inicializacaoPromise: Promise<void>;
   private emailUsuarioLogado = '';
   private listenerRegistrado = false;
+  private linkRecuperacaoDetectado = false;
+  private urlRecuperacaoInvalida = false;
+  private recoveryTokenHash: string | null = null;
+  private recoveryTokenIsRecovery = false;
 
   constructor() {
+    this.inspecionarUrlRecuperacao();
+    this.registrarListenerAuth();
     this.inicializacaoPromise = this.inicializarSessao();
+  }
+
+  private inspecionarUrlRecuperacao(): void {
+    if (typeof window === 'undefined') return;
+    const query = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    this.recoveryTokenHash = query.get('token_hash') ?? hash.get('token_hash');
+    this.recoveryTokenIsRecovery = (query.get('type') ?? hash.get('type')) === 'recovery';
+    // A intenção da URL sozinha não autoriza a troca: o Supabase ainda precisa
+    // validar o link e emitir PASSWORD_RECOVERY (ou validar token_hash abaixo).
+    this.urlRecuperacaoInvalida = !!(
+      query.get('error') || query.get('error_code') ||
+      hash.get('error') || hash.get('error_code')
+    );
+  }
+
+  private registrarListenerAuth(): void {
+    if (this.listenerRegistrado) return;
+    this.listenerRegistrado = true;
+    supabase.auth.onAuthStateChange((evento, sessao) => {
+      if (evento === 'PASSWORD_RECOVERY') {
+        this.linkRecuperacaoDetectado = !!sessao;
+        return;
+      }
+      // Evita aguardar consultas ao banco dentro do callback de autenticação.
+      Promise.resolve().then(async () => {
+        if (
+          evento === 'SIGNED_IN' ||
+          evento === 'TOKEN_REFRESHED' ||
+          evento === 'USER_UPDATED'
+        ) {
+          if (sessao?.user) {
+            this.emailUsuarioLogado = sessao.user.email ?? '';
+            await this.carregarPerfilESessao(sessao.user);
+          }
+        } else if (evento === 'SIGNED_OUT') {
+          this.emailUsuarioLogado = '';
+          this.usuarioLogadoSubject.next(null);
+          this.linkRecuperacaoDetectado = false;
+        }
+      });
+    });
+  }
+
+  private async comLimite<T>(operacao: PromiseLike<T>, ms: number): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        Promise.resolve(operacao),
+        new Promise<T>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('auth_timeout')), ms);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  async solicitarRedefinicaoSenha(email: string): Promise<{ ok: boolean; erro?: string }> {
+    const emailNormalizado = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalizado)) {
+      return { ok: false, erro: 'Informe um e-mail válido.' };
+    }
+    if (typeof window === 'undefined') {
+      return { ok: false, erro: 'Não foi possível iniciar a recuperação neste ambiente.' };
+    }
+    try {
+      const { error } = await this.comLimite(
+        supabase.auth.resetPasswordForEmail(emailNormalizado, {
+          redirectTo: `${window.location.origin}/redefinir-senha`,
+        }),
+        15000,
+      );
+      if (error) {
+        const status = (error as { status?: number }).status;
+        return {
+          ok: false,
+          erro: status === 429
+            ? 'Muitas tentativas. Aguarde alguns minutos e tente novamente.'
+            : 'Não foi possível enviar o e-mail agora. Confira o endereço e tente novamente.',
+        };
+      }
+      // Resposta genérica para não revelar se o endereço possui uma conta.
+      return { ok: true };
+    } catch {
+      return { ok: false, erro: 'A solicitação demorou ou falhou. Verifique sua conexão e tente novamente.' };
+    }
+  }
+
+  async validarContextoRecuperacao(): Promise<boolean> {
+    if (this.urlRecuperacaoInvalida) {
+      this.limparCredenciaisDaUrl();
+      return false;
+    }
+    try {
+      // getSession inicializa o tratamento automático de callbacks PKCE/implicit do Supabase.
+      await this.comLimite(this.inicializacaoPromise, 10000).catch(() => undefined);
+
+      if (typeof window !== 'undefined') {
+        const tokenHash = this.recoveryTokenHash;
+        if (tokenHash && this.recoveryTokenIsRecovery) {
+          const { data, error } = await this.comLimite(
+            supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }),
+            10000,
+          );
+          if (error || !data.session) {
+            this.limparCredenciaisDaUrl();
+            return false;
+          }
+          this.linkRecuperacaoDetectado = true;
+          this.recoveryTokenHash = null;
+          this.recoveryTokenIsRecovery = false;
+        }
+      }
+
+      const { data, error } = await this.comLimite(supabase.auth.getSession(), 10000);
+      if (error || !data.session) {
+        this.limparCredenciaisDaUrl();
+        return false;
+      }
+      this.limparCredenciaisDaUrl();
+      return this.linkRecuperacaoDetectado;
+    } catch {
+      this.limparCredenciaisDaUrl();
+      return false;
+    }
+  }
+
+  private limparCredenciaisDaUrl(): void {
+    if (typeof window === 'undefined') return;
+    // Não mantém code, token_hash, access_token ou refresh_token visíveis na barra.
+    window.history.replaceState({}, document.title, `${window.location.pathname}`);
+  }
+
+  async atualizarSenhaEmRecuperacao(novaSenha: string): Promise<{ ok: boolean; erro?: string }> {
+    if (!this.linkRecuperacaoDetectado) {
+      return { ok: false, erro: 'A recuperação não é mais válida. Solicite um novo e-mail.' };
+    }
+    if (novaSenha.length < 6) {
+      return { ok: false, erro: 'A senha precisa ter pelo menos 6 caracteres.' };
+    }
+    try {
+      const { data, error } = await this.comLimite(
+        supabase.auth.updateUser({ password: novaSenha }),
+        15000,
+      );
+      if (error || !data.user) {
+        const code = (error as { code?: string } | null)?.code;
+        const fraca = code === 'weak_password';
+        return {
+          ok: false,
+          erro: fraca
+            ? 'A senha não atende aos requisitos de segurança. Escolha outra senha.'
+            : 'Não foi possível redefinir a senha. O link pode ter expirado; solicite outro e-mail.',
+        };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, erro: 'Não foi possível concluir a alteração. Verifique sua conexão e tente novamente.' };
+    }
+  }
+
+  async encerrarContextoRecuperacao(): Promise<void> {
+    this.linkRecuperacaoDetectado = false;
+    try {
+      await this.comLimite(supabase.auth.signOut({ scope: 'local' }), 8000);
+    } catch {
+      // A senha já foi atualizada; não transforma falha ao limpar a sessão local em falha de redefinição.
+    }
   }
 
   // --------------------------------------------------
@@ -122,31 +297,8 @@ export class AuthService {
         await this.carregarPerfilESessao(data.session.user);
       }
 
-      if (!this.listenerRegistrado) {
-        this.listenerRegistrado = true;
-
-        supabase.auth.onAuthStateChange((evento, sessao) => {
-          // Evita aguardar consultas ao banco dentro do callback
-          // de autenticação do Supabase.
-          Promise.resolve().then(async () => {
-            if (
-              evento === 'SIGNED_IN' ||
-              evento === 'TOKEN_REFRESHED' ||
-              evento === 'USER_UPDATED'
-            ) {
-              if (sessao?.user) {
-                this.emailUsuarioLogado = sessao.user.email ?? '';
-                await this.carregarPerfilESessao(sessao.user);
-              }
-            } else if (evento === 'SIGNED_OUT') {
-              this.emailUsuarioLogado = '';
-              this.usuarioLogadoSubject.next(null);
-            }
-          });
-        });
-      }
-    } catch (erro) {
-      console.error('Erro ao inicializar autenticação:', erro);
+    } catch {
+      console.error('Erro ao inicializar autenticação.');
     }
   }
 

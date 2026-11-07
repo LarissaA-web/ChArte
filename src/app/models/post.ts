@@ -8,6 +8,7 @@ export interface Post {
   nomeArtistico: string;
   preco: number;
   estilo?: string;
+  estiloId?: number;
 
   usuario: {
     id: number;

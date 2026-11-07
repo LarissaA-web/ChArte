@@ -12,6 +12,8 @@ import { inject } from '@angular/core';
 import { AuthService } from '../services/auth.service';
 import { ModalService } from '../services/modal.service';
 import { UserProfileSettings } from './components/profile/user-profile-settings/user-profile-settings';
+import { RedefinirSenha } from './pages/redefinir-senha/redefinir-senha';
+import { EsqueciSenha } from './pages/esqueci-senha/esqueci-senha';
 
 const userLoginGuard = async () => {
   const auth = inject(AuthService);
@@ -51,6 +53,14 @@ export const routes: Routes = [
   {
     path: 'cadastro',
     component: Cadastro,
+  },
+  {
+    path: 'esqueci-senha',
+    component: EsqueciSenha,
+  },
+  {
+    path: 'redefinir-senha',
+    component: RedefinirSenha,
   },
   {
     path: 'configuracoes',

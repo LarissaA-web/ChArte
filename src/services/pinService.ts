@@ -3,12 +3,16 @@ import { BehaviorSubject, Observable, combineLatest, from, of } from 'rxjs';
 import { Post } from '../app/models/post';
 import { supabase } from '../app/core/supabase/supabase.client';
 import { map, catchError } from 'rxjs/operators';
+import { CategoriaCatalogo, EstiloCatalogo } from '../app/models/catalog-options';
 
 @Injectable({ providedIn: 'root' })
 export class PinService {
 
   private artesCache: Post[] = [];
   private carregado = false;
+  private categoriasCache: CategoriaCatalogo[] | null = null;
+  private estilosCache: EstiloCatalogo[] | null = null;
+  erroCarregamentoArtes = false;
   private readonly termoPesquisaSubject = new BehaviorSubject<string>('');
   readonly termoPesquisa$ = this.termoPesquisaSubject.asObservable();
 
@@ -18,6 +22,34 @@ export class PinService {
 
   getTermoPesquisa(): string {
     return this.termoPesquisaSubject.value;
+  }
+
+  obterCategorias(): Observable<CategoriaCatalogo[]> {
+    return from(this.carregarCategorias());
+  }
+
+  obterEstilos(): Observable<EstiloCatalogo[]> {
+    return from(this.carregarEstilos());
+  }
+
+  private async carregarCategorias(): Promise<CategoriaCatalogo[]> {
+    if (this.categoriasCache) return this.categoriasCache;
+    const { data, error } = await supabase
+      .from('categoria')
+      .select('id_categoria, nome_categoria, descricao_categoria');
+    if (error) throw error;
+    this.categoriasCache = (data ?? []) as CategoriaCatalogo[];
+    return this.categoriasCache;
+  }
+
+  private async carregarEstilos(): Promise<EstiloCatalogo[]> {
+    if (this.estilosCache) return this.estilosCache;
+    const { data, error } = await supabase
+      .from('estilo')
+      .select('id_estilo, nome_estilo, descricao, data_criacao');
+    if (error) throw error;
+    this.estilosCache = (data ?? []) as EstiloCatalogo[];
+    return this.estilosCache;
   }
 
   private obterTodasArtes(): Observable<Post[]> {
@@ -112,11 +144,22 @@ export class PinService {
     const { data: categoriaData, error: erroCategoria } = await supabase
       .from('categoria')
       .select('id_categoria')
-      .ilike('nome_categoria', dados.categoria)
-      .single();
+      .eq('nome_categoria', dados.categoria)
+      .maybeSingle();
 
     if (erroCategoria || !categoriaData) {
       console.error('Erro ao localizar categoria:', erroCategoria);
+      return null;
+    }
+
+    const { data: estiloData, error: erroEstilo } = await supabase
+      .from('estilo')
+      .select('id_estilo')
+      .eq('nome_estilo', dados.estilo)
+      .maybeSingle();
+
+    if (erroEstilo || !estiloData) {
+      console.error('Erro ao localizar estilo:', erroEstilo);
       return null;
     }
 
@@ -157,13 +200,14 @@ export class PinService {
       .insert({
         id_artista: perfil.idArtista,
         id_categoria: categoriaData.id_categoria,
+        id_estilo: estiloData.id_estilo,
         titulo: dados.titulo,
         descricao: dados.descricao,
         preco: dados.preco,
         imagem: caminhoImagem,
       })
       .select(
-        'id_portifolio, id_artista, id_categoria, titulo, descricao, preco, imagem, data_envio'
+        'id_portifolio, id_artista, id_categoria, id_estilo, titulo, descricao, preco, imagem, data_envio'
       )
       .single();
 
@@ -194,6 +238,20 @@ export class PinService {
   }
 
   async atualizarArte(arte: Post): Promise<boolean> {
+    const { data: categoriaData, error: erroCategoria } = await supabase
+      .from('categoria')
+      .select('id_categoria')
+      .eq('nome_categoria', arte.categoria.nomeCategoria)
+      .maybeSingle();
+    const { data: estiloData, error: erroEstilo } = await supabase
+      .from('estilo')
+      .select('id_estilo')
+      .eq('nome_estilo', arte.estilo ?? '')
+      .maybeSingle();
+    if (erroCategoria || !categoriaData || erroEstilo || !estiloData) {
+      console.error('Erro ao localizar categoria ou estilo da arte:', erroCategoria ?? erroEstilo);
+      return false;
+    }
     const { error } = await supabase
       .from('portifolio')
       .update({
@@ -201,7 +259,8 @@ export class PinService {
         descricao: arte.descricao,
         preco: arte.preco,
         imagem: arte.portfolio,
-        id_categoria: arte.categoria.id,
+        id_categoria: categoriaData.id_categoria,
+        id_estilo: estiloData.id_estilo,
       })
       .eq('id_portifolio', arte.id);
 
@@ -299,6 +358,7 @@ export class PinService {
         id_portifolio,
         id_artista,
         id_categoria,
+        id_estilo,
         titulo,
         descricao,
         preco,
@@ -311,17 +371,23 @@ export class PinService {
         categoria (
           id_categoria,
           nome_categoria
+        ),
+        estilo (
+          id_estilo,
+          nome_estilo
         )
       `);
 
     if (error) {
       console.error('Erro ao carregar artes:', error);
+      this.erroCarregamentoArtes = true;
       this.artesCache = [];
       this.carregado = true;
       return;
     }
 
     const artesBanco = data ?? [];
+    this.erroCarregamentoArtes = false;
 
     if (artesBanco.length === 0) {
       this.artesCache = [];
@@ -357,7 +423,8 @@ export class PinService {
         portfolio: this.obterUrlImagem(item.imagem),
         nomeArtistico: artista?.nome_artistico ?? item.artista?.nome_artistico ?? 'Artista',
         preco: Number(item.preco),
-        estilo: undefined,
+        estilo: item.estilo?.nome_estilo,
+        estiloId: item.id_estilo ?? item.estilo?.id_estilo,
         tags: undefined,
         criadoEm: item.data_envio,
         usuario: {

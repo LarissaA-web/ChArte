@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { Card } from '../card/card';
 import { CardSm } from '../card-sm/card-sm';
-import { CATEGORIAS, ESTILOS } from '../../models/catalog-options';
+import { PinService } from '../../../services/pinService';
+import { CategoriaCatalogo, EstiloCatalogo } from '../../models/catalog-options';
 
 @Component({
   selector: 'app-swipeables-cards',
@@ -9,7 +10,14 @@ import { CATEGORIAS, ESTILOS } from '../../models/catalog-options';
   templateUrl: './swipeables-cards.html',
   styleUrl: './swipeables-cards.css',
 })
-export class SwipeablesCards {
+export class SwipeablesCards implements OnInit {
+  constructor(private readonly pinService: PinService) {}
+
+  categorias: CategoriaCatalogo[] = [];
+  estilos: EstiloCatalogo[] = [];
+  erroCategorias = '';
+  erroEstilos = '';
+
   private readonly imagensPorEstilo: Record<string, string> = {
     'Mangá': 'Manga_style.jpeg',
     'Cartoon': 'cartoon_style.jpeg',
@@ -33,11 +41,19 @@ export class SwipeablesCards {
     'Grunge': 'grunge_style.jpeg',
     'Punk': 'punk_style.jpeg',
   };
-  categorias = CATEGORIAS.map((nome) => ({ nome, categoria: nome }));
-  estilos = ESTILOS.map((nome) => ({
-    nome,
-    imagem: this.imagensPorEstilo[nome]
-      ? `/styles-icons/${this.imagensPorEstilo[nome]}`
-      : '/gato.jpeg',
-  }));
+  ngOnInit(): void {
+    this.pinService.obterCategorias().subscribe({
+      next: categorias => this.categorias = categorias,
+      error: erro => { console.error('Erro ao carregar categorias:', erro); this.erroCategorias = 'Não foi possível carregar as categorias.'; },
+    });
+    this.pinService.obterEstilos().subscribe({
+      next: estilos => this.estilos = estilos,
+      error: erro => { console.error('Erro ao carregar estilos:', erro); this.erroEstilos = 'Não foi possível carregar os estilos.'; },
+    });
+  }
+
+  imagemDoEstilo(estilo: EstiloCatalogo): string {
+    const imagem = this.imagensPorEstilo[estilo.nome_estilo];
+    return imagem ? `/styles-icons/${imagem}` : '/gato.jpeg';
+  }
 }

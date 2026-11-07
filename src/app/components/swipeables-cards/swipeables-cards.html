@@ -1,11 +1,13 @@
 <div class="swipeablesCards">
-  @for (categoria of categorias; track categoria.nome) {
-    <app-card [categoria]="categoria.nome"> </app-card>
+  @if (erroCategorias) { <p role="alert">{{ erroCategorias }}</p> }
+  @for (categoria of categorias; track categoria.id_categoria) {
+    <app-card [categoria]="categoria.nome_categoria"> </app-card>
   }
 </div>
 
 <div class="catalogueSelector">
-  @for (estilo of estilos; track estilo.nome) {
-    <app-card-sm [imagem]="estilo.imagem" [estilo]="estilo.nome"> </app-card-sm>
+  @if (erroEstilos) { <p role="alert">{{ erroEstilos }}</p> }
+  @for (estilo of estilos; track estilo.id_estilo) {
+    <app-card-sm [imagem]="imagemDoEstilo(estilo)" [estilo]="estilo.nome_estilo"> </app-card-sm>
   }
 </div>

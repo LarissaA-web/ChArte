@@ -1,11 +1,12 @@
-import { Component, EventEmitter, Output } from '@angular/core';
+import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../services/auth.service';
 import { ModalService } from '../../../services/modal.service';
 import { PerfilService } from '../../../services/perfil.service';
 import { PinService } from '../../../services/pinService';
 import { Post } from '../../models/post';
-import { CATEGORIAS, ESTILOS } from '../../models/catalog-options';
+import { CategoriaCatalogo, EstiloCatalogo } from '../../models/catalog-options';
 
 @Component({
   selector: 'app-post-modal',
@@ -14,7 +15,7 @@ import { CATEGORIAS, ESTILOS } from '../../models/catalog-options';
   templateUrl: './post-modal.html',
   styleUrl: './post-modal.css',
 })
-export class PostModal {
+export class PostModal implements OnInit {
   @Output() artePublicada = new EventEmitter<Post>();
   titulo = '';
   descricao = '';
@@ -27,8 +28,11 @@ export class PostModal {
   erro = '';
   publicando = false;
 
-  categorias = CATEGORIAS.map((nome) => ({ nome }));
-  estilos = ESTILOS.map((nome) => ({ nome }));
+  categorias: CategoriaCatalogo[] = [];
+  estilos: EstiloCatalogo[] = [];
+  carregandoCatalogos = true;
+  erroCatalogo = '';
+  private readonly subscriptions = new Subscription();
 
   constructor(
     private modalService: ModalService,
@@ -36,6 +40,23 @@ export class PostModal {
     private perfilService: PerfilService,
     private pinService: PinService,
   ) {}
+
+  ngOnInit(): void {
+    this.subscriptions.add(this.pinService.obterCategorias().subscribe({
+      next: categorias => { this.categorias = categorias; this.finalizarCarregamentoCatalogos(); },
+      error: erro => { console.error('Erro ao carregar categorias:', erro); this.erroCatalogo = 'Não foi possível carregar as categorias. Tente novamente.'; this.finalizarCarregamentoCatalogos(); },
+    }));
+    this.subscriptions.add(this.pinService.obterEstilos().subscribe({
+      next: estilos => { this.estilos = estilos; this.finalizarCarregamentoCatalogos(); },
+      error: erro => { console.error('Erro ao carregar estilos:', erro); this.erroCatalogo = 'Não foi possível carregar os estilos. Tente novamente.'; this.finalizarCarregamentoCatalogos(); },
+    }));
+  }
+
+  private catalogosPendentes = 2;
+  private finalizarCarregamentoCatalogos(): void {
+    this.catalogosPendentes -= 1;
+    if (this.catalogosPendentes === 0) this.carregandoCatalogos = false;
+  }
 
   fecharModal(): void { this.modalService.closeModal(); }
 
@@ -49,8 +70,13 @@ export class PostModal {
       return;
     }
 
-    if (!this.titulo.trim() || !this.imagemSelecionada || !this.categoria) {
-      this.erro = 'Preencha o título, a imagem e a categoria.';
+    if (!this.titulo.trim() || !this.imagemSelecionada || !this.categoria || !this.estilo) {
+      this.erro = 'Preencha o título, a imagem, a categoria e o estilo.';
+      return;
+    }
+
+    if (this.carregandoCatalogos || !this.categorias.length || !this.estilos.length) {
+      this.erro = this.erroCatalogo || 'Categorias e estilos ainda não estão disponíveis.';
       return;
     }
 
@@ -82,12 +108,8 @@ export class PostModal {
         descricao: this.descricao.trim(),
         portfolio: '',
         arquivo,
-        categoria: this.categorias.find(
-          item => item.nome.toLowerCase() === this.categoria.toLowerCase()
-        )?.nome || this.categoria,
-        estilo: this.estilos.find(
-          item => item.nome.toLowerCase() === this.estilo.toLowerCase()
-        )?.nome || this.estilo,
+        categoria: this.categorias.find(item => item.nome_categoria === this.categoria)?.nome_categoria ?? this.categoria,
+        estilo: this.estilos.find(item => item.nome_estilo === this.estilo)?.nome_estilo ?? this.estilo,
         preco: this.compravel ? Number(this.preco) : 0,
       }, perfil);
 

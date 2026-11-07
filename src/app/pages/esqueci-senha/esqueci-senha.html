@@ -1,0 +1,39 @@
+<main class="recovery-page">
+  <section class="recovery-panel" aria-labelledby="recovery-title">
+    <a class="recovery-brand" routerLink="/">ChArte</a>
+    @if (solicitado) {
+      <div class="recovery-state">
+        <span class="recovery-eyebrow">Confira seu e-mail</span>
+        <h1 id="recovery-title">Solicitação enviada</h1>
+        <p>Se existir uma conta com esse endereço, enviaremos um link para redefinir a senha. Confira também a pasta de spam.</p>
+        <a class="recovery-button recovery-button--link" routerLink="/">Voltar ao ChArte</a>
+      </div>
+    } @else {
+      <header class="recovery-header">
+        <span class="recovery-eyebrow">Recuperação de conta</span>
+        <h1 id="recovery-title">Esqueceu sua senha?</h1>
+        <p>Informe o e-mail cadastrado e enviaremos um link para criar outra senha.</p>
+      </header>
+      <form class="recovery-form" (ngSubmit)="solicitar()" [attr.aria-busy]="enviando">
+        <label class="recovery-field">
+          <span>E-mail</span>
+          <input
+            type="email"
+            name="email"
+            [(ngModel)]="email"
+            autocomplete="email"
+            required
+            email
+            placeholder="voce@email.com"
+            [disabled]="enviando"
+          />
+        </label>
+        @if (erro) { <p class="recovery-error" role="alert">{{ erro }}</p> }
+        <button class="recovery-button" type="submit" [disabled]="enviando">
+          {{ enviando ? 'Enviando...' : 'Enviar link de recuperação' }}
+        </button>
+        <a class="recovery-back" routerLink="/">Voltar ao ChArte</a>
+      </form>
+    }
+  </section>
+</main>

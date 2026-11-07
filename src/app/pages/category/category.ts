@@ -19,6 +19,7 @@ import { PinService } from '../../../services/pinService';
 export class Category implements OnInit, OnDestroy {
   artes: Post[] = [];
   categoria = '';
+  erroCarregamento = false;
   private routeSubscription?: Subscription;
 
   constructor(
@@ -32,6 +33,7 @@ export class Category implements OnInit, OnDestroy {
       this.categoria = params.get('categoria') ?? '';
       this.pinService.buscarPorCategoria(this.categoria).subscribe((pins) => {
         this.artes = pins;
+        this.erroCarregamento = this.pinService.erroCarregamentoArtes;
         this.cdr.detectChanges();
       });
     });

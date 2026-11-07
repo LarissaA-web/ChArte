@@ -6,7 +6,9 @@
     <p>{{ artes.length }} {{ artes.length === 1 ? 'pin encontrado' : 'pins encontrados' }}</p>
   </header>
 
-  @if (artes.length) {
+  @if (erroCarregamento) {
+    <p class="catalog-empty" role="alert">Não foi possível carregar as artes. Tente novamente.</p>
+  } @else if (artes.length) {
     <div class="pin_container">
       @for (post of artes; track post.id) {
         <app-pin-card [post]="post"></app-pin-card>

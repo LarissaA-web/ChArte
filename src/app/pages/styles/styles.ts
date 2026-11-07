@@ -19,6 +19,7 @@ import { PinService } from '../../../services/pinService';
 export class Styles implements OnInit, OnDestroy {
   artes: Post[] = [];
   estilo = '';
+  erroCarregamento = false;
   private routeSubscription?: Subscription;
 
   constructor(
@@ -32,6 +33,7 @@ export class Styles implements OnInit, OnDestroy {
       this.estilo = params.get('estilo') ?? '';
       this.pinService.buscarPorEstilo(this.estilo).subscribe((pins) => {
         this.artes = pins;
+        this.erroCarregamento = this.pinService.erroCarregamentoArtes;
         this.cdr.detectChanges();
       });
     });
