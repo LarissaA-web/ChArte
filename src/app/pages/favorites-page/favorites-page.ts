@@ -18,6 +18,8 @@ import { Observable, Subscription, combineLatest } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Post } from '../../models/post';
 import { Comissao } from '../../models/artist-area';
+import { ArtistReviewModal } from '../../components/artist-review-modal/artist-review-modal';
+import { ArtistReviewService, ReviewTarget } from '../../../services/artist-review.service';
 
 export type AbaCentralCliente = 'favoritos' | 'carrinho' | 'pedidos' | 'pagamentos' | 'seguindo';
 
@@ -30,6 +32,7 @@ export type AbaCentralCliente = 'favoritos' | 'carrinho' | 'pedidos' | 'pagament
     PinCardModal,
     SubMenu,
     ArtistLoginModal,
+    ArtistReviewModal,
     CurrencyPipe,
     DatePipe,
     RouterLink,
@@ -51,6 +54,9 @@ export class FavoritesPage implements OnInit, OnDestroy {
   erroCarrinho = '';
   carregandoPagamentos = false;
   carregandoSeguindo = false;
+  avaliacoesPendentes: ReviewTarget[] = [];
+  avaliacaoAtiva: ReviewTarget | null = null;
+  carregandoAvaliacoesPendentes = false;
 
   private subscriptions = new Subscription();
 
@@ -64,6 +70,7 @@ export class FavoritesPage implements OnInit, OnDestroy {
     public carrinho: CarrinhoService,
     private pinService: PinService,
     private paymentService: PaymentService,
+    private artistReviewService: ArtistReviewService,
     private followersService: FollowersService,
     private cdr: ChangeDetectorRef,
   ) {}
@@ -238,6 +245,7 @@ export class FavoritesPage implements OnInit, OnDestroy {
   private async carregarPagamentos(): Promise<void> {
     if (!this.username) return;
     this.carregandoPagamentos = true;
+    void this.atualizarAvaliacoesPendentes();
     this.cdr.detectChanges();
     try {
       this.historicoPagamentos = await this.paymentService.listarHistoricoCliente();
@@ -247,6 +255,24 @@ export class FavoritesPage implements OnInit, OnDestroy {
       this.carregandoPagamentos = false;
       this.cdr.detectChanges();
     }
+  }
+
+  async atualizarAvaliacoesPendentes(): Promise<void> {
+    if (!this.username) return;
+    this.carregandoAvaliacoesPendentes = true;
+    this.cdr.detectChanges();
+    try {
+      this.avaliacoesPendentes = await this.artistReviewService.listarPendentesDoCliente();
+    } catch {
+      this.avaliacoesPendentes = [];
+    } finally {
+      this.carregandoAvaliacoesPendentes = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  avaliar(target: ReviewTarget): void {
+    this.avaliacaoAtiva = target;
   }
 
   private async carregarSeguindo(): Promise<void> {

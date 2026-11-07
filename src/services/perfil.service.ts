@@ -3,9 +3,12 @@ import { Observable, from, of } from 'rxjs';
 import { PerfilView } from '../app/models/perfil';
 import { supabase } from '../app/core/supabase/supabase.client';
 import { catchError } from 'rxjs/operators';
+import { ArtistReviewService } from './artist-review.service';
 
 @Injectable({ providedIn: 'root' })
 export class PerfilService {
+
+  constructor(private readonly reviews: ArtistReviewService) {}
 
   getPerfil(nomeUsuario: string): Observable<PerfilView | null> {
     const nome = nomeUsuario.trim().replace(/^@/, '').toLowerCase();
@@ -56,7 +59,7 @@ export class PerfilService {
       { data: redes },
       { count: seguidoresCount },
       { count: seguindoCount },
-      { data: reviewsData },
+      reviewSummary,
     ] = await Promise.all([
       supabase
         .from('redes_sociais')
@@ -72,24 +75,13 @@ export class PerfilService {
         .select('id', { count: 'exact', head: true })
         .eq('id_seguidor', usuario.id_usuario),
       artistaData?.id_artista
-        ? supabase
-            .from('review')
-            .select('nota')
-            .eq('id_artista', artistaData.id_artista)
-        : Promise.resolve({ data: [] as any[] }),
+        ? this.reviews.obterResumoArtista(artistaData.id_artista).catch(() => ({ average: null, total: 0, reviews: [] }))
+        : Promise.resolve({ average: null, total: 0, reviews: [] }),
     ]);
 
     const redesSociais = redes ?? {};
-    const totalReviews = Array.isArray(reviewsData) ? reviewsData.length : 0;
-    const avaliacaoMedia =
-      totalReviews > 0
-        ? Number(
-            (
-              reviewsData!.reduce((acc: number, r: any) => acc + Number(r.nota ?? 5), 0) /
-              totalReviews
-            ).toFixed(1),
-          )
-        : 0;
+    const totalReviews = reviewSummary.total;
+    const avaliacaoMedia = reviewSummary.average;
 
     return {
       idUsuario: String(usuario.id_usuario),

@@ -15,11 +15,13 @@ import {
 } from '../../models/artist-area';
 import { PaymentService, PaymentView } from '../../../services/payment.service';
 import { Subscription, combineLatest } from 'rxjs';
+import { ArtistReviewModal } from '../../components/artist-review-modal/artist-review-modal';
+import { ArtistReviewService, ReviewTarget } from '../../../services/artist-review.service';
 
 @Component({
   selector: 'app-order-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyPipe, DatePipe, RouterLink],
+  imports: [CommonModule, FormsModule, CurrencyPipe, DatePipe, RouterLink, ArtistReviewModal],
   template: `
     <main class="order-detail-page">
       @if (pedido) {
@@ -597,49 +599,12 @@ import { Subscription, combineLatest } from 'rxjs';
           </aside>
         </div>
 
-        @if (modalAvaliacaoAberto) {
-          <div class="rating-backdrop" (click)="fecharModalAvaliacao()">
-            <section class="rating-dialog" role="dialog" aria-modal="true" aria-labelledby="rating-title" (click)="$event.stopPropagation()">
-              <button class="rating-close" type="button" aria-label="Fechar avaliação" (click)="fecharModalAvaliacao()">×</button>
-              @if (!avaliacaoEnviada) {
-                <div class="rating-icon" aria-hidden="true">✦</div>
-                <span class="detail-label">COMISSÃO FINALIZADA</span>
-                <h2 id="rating-title">Como foi sua experiência?</h2>
-                <p class="rating-intro">Sua avaliação ajuda outras pessoas a conhecer o trabalho de <strong>@{{ pedido.artistaUsername }}</strong>.</p>
-                <div class="rating-stars" role="group" aria-label="Selecione uma nota de 1 a 5 estrelas">
-                  @for (estrela of estrelas; track estrela) {
-                    <button
-                      type="button"
-                      class="rating-star"
-                      [class.active]="estrela <= (notaEmDestaque || notaAvaliacao)"
-                      [attr.aria-label]="estrela + (estrela === 1 ? ' estrela' : ' estrelas')"
-                      [attr.aria-pressed]="notaAvaliacao === estrela"
-                      (mouseenter)="notaEmDestaque = estrela"
-                      (focus)="notaEmDestaque = estrela"
-                      (blur)="notaEmDestaque = 0"
-                      (click)="selecionarNota(estrela)"
-                    >★</button>
-                  }
-                </div>
-                <p class="rating-caption" aria-live="polite">{{ textoNota }}</p>
-                <label class="rating-comment-label" for="rating-comment">Comentário <span>(opcional)</span></label>
-                <textarea id="rating-comment" [(ngModel)]="comentarioAvaliacao" maxlength="500" placeholder="Conte o que achou do resultado…"></textarea>
-                @if (erroAvaliacao) {
-                  <p class="rating-error" role="alert">{{ erroAvaliacao }}</p>
-                }
-                <button type="button" class="rating-submit" [disabled]="!notaAvaliacao || enviandoAvaliacao" (click)="enviarAvaliacao()">
-                  {{ enviandoAvaliacao ? 'Enviando avaliação…' : 'Enviar avaliação' }}
-                </button>
-                <button type="button" class="rating-skip" [disabled]="enviandoAvaliacao" (click)="fecharModalAvaliacao()">Agora não</button>
-              } @else {
-                <div class="rating-icon success" aria-hidden="true">✓</div>
-                <h2 id="rating-title">Obrigado pela avaliação!</h2>
-                <p class="rating-intro">Sua opinião foi registrada e ajuda a comunidade ChArte.</p>
-                <button type="button" class="rating-submit" (click)="fecharModalAvaliacao()">Concluir</button>
-              }
-            </section>
-          </div>
+        @if (reviewTarget) {
+          <button class="review-again" type="button" (click)="abrirModalAvaliacao()">★ Avaliar esta transação</button>
         }
+        <app-artist-review-modal [open]="modalAvaliacaoAberto" [origin]="reviewTarget?.origin ?? null"
+          [artistName]="reviewTarget?.artistName || pedido.artistaUsername"
+          (closed)="modalAvaliacaoAberto = false" (submitted)="avaliacaoConcluida()" />
       } @else if (carregandoPedido) {
         <section class="missing-order">
           <h1>Carregando pedido...</h1>
@@ -778,34 +743,9 @@ import { Subscription, combineLatest } from 'rxjs';
     .missing-order{padding:100px 0;text-align:center}
     .missing-order p{color:#aaa0af}
     .missing-order a{color:#d396f1}
-    .rating-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:rgba(12,9,15,.78);backdrop-filter:blur(7px);animation:ratingFade .2s ease-out}
-    .rating-dialog{position:relative;width:min(100%,460px);box-sizing:border-box;padding:36px 34px 30px;text-align:center;background:#211b25;border:1px solid #614573;border-radius:22px;box-shadow:0 24px 80px #0009;animation:ratingPop .25s ease-out}
-    .rating-close{position:absolute;top:12px;right:14px;width:36px;height:36px;border:0;border-radius:50%;background:#302637;color:#d7c6df;font-size:25px;line-height:1;cursor:pointer}
-    .rating-icon{width:54px;height:54px;display:grid;place-items:center;margin:0 auto 18px;border-radius:50%;background:#3a2547;color:#e4b2fc;font-size:25px}
-    .rating-icon.success{background:#1e3b2b;color:#a9e0b8}
-    .rating-dialog h2{margin:8px 0;font-size:24px}
-    .rating-intro{margin:0 auto 18px;max-width:360px;color:#bdb1c2;line-height:1.55;font-size:14px}
-    .rating-intro strong{color:#e2c4f0}
-    .rating-stars{display:flex;justify-content:center;gap:7px;margin:10px 0 0}
-    .rating-star{width:48px;height:50px;border:0;border-radius:12px;background:#302936;color:#645b69;font-size:32px;cursor:pointer;transition:transform .16s ease,color .16s ease,background .16s ease}
-    .rating-star:hover,.rating-star:focus-visible{transform:translateY(-4px) scale(1.08);outline:2px solid #c178e0;outline-offset:2px}
-    .rating-star.active{color:#ffc857;background:#3b3020;text-shadow:0 0 15px #ffc85766}
-    .rating-caption{height:22px;margin:8px 0 20px;color:#e8c5f7;font-size:13px;font-weight:700}
-    .rating-comment-label{display:block;margin:0 0 7px;text-align:left;color:#ded3e3;font-size:13px;font-weight:700}
-    .rating-comment-label span{font-weight:400;color:#978c9c}
-    .rating-dialog textarea{display:block;width:100%;min-height:92px;box-sizing:border-box;resize:vertical;padding:11px 12px;border-radius:10px;border:1px solid #4d4054;background:#17131a;color:#f8f5fa;font:inherit;font-size:13px}
-    .rating-dialog textarea:focus{outline:2px solid #a447d2;outline-offset:1px}
-    .rating-error{margin:10px 0 0;color:#ffb8bd;font-size:13px}
-    .rating-submit{width:100%;margin-top:18px;padding:13px;border:0;border-radius:10px;background:linear-gradient(135deg,#a447d2,#7528a3);color:#fff;font-weight:800;font-size:14px;cursor:pointer;transition:transform .15s ease,filter .15s ease}
-    .rating-submit:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.1)}
-    .rating-submit:disabled{opacity:.48;cursor:not-allowed}
-    .rating-skip{margin-top:12px;padding:8px 16px;border:0;background:transparent;color:#aaa0af;font-size:13px;cursor:pointer}
-    .rating-skip:hover,.rating-close:hover{color:#fff}
-    @keyframes ratingFade{from{opacity:0}to{opacity:1}}
-    @keyframes ratingPop{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+    .review-again{width:100%;margin-top:10px;padding:10px;border:1px solid #76538b;border-radius:9px;background:#32243a;color:#edcffc;font-weight:700;cursor:pointer}
     @media(max-width:900px){.detail-grid{grid-template-columns:1fr}.summary-card{position:static}}
     @media(max-width:820px){.order-detail-page{padding:24px 16px 55px}.detail-heading h1{font-size:26px}}
-    @media(max-width:480px){.rating-dialog{padding:34px 20px 22px}.rating-star{width:44px;height:46px;font-size:29px}.rating-dialog h2{font-size:21px}}
   `],
 })
 export class OrderDetail implements OnInit, OnDestroy {
@@ -822,19 +762,7 @@ export class OrderDetail implements OnInit, OnDestroy {
   statusErro = false;
   statusCarregando = false;
   modalAvaliacaoAberto = false;
-  notaAvaliacao = 0;
-  notaEmDestaque = 0;
-  comentarioAvaliacao = '';
-  enviandoAvaliacao = false;
-  avaliacaoEnviada = false;
-  erroAvaliacao = '';
-  readonly estrelas = [1, 2, 3, 4, 5];
-  private readonly descricoesNota = ['', 'Não gostei', 'Poderia ser melhor', 'Foi bom', 'Gostei muito', 'Adorei!'];
-
-  get textoNota(): string {
-    const nota = this.notaEmDestaque || this.notaAvaliacao;
-    return nota ? `${nota} ${nota === 1 ? 'estrela' : 'estrelas'} · ${this.descricoesNota[nota]}` : 'Toque em uma estrela para avaliar';
-  }
+  reviewTarget: ReviewTarget | null = null;
 
   metodoPagamento: 'pix' | 'card' | 'transfer' = 'pix';
   checkoutAtivo = false;
@@ -934,6 +862,7 @@ export class OrderDetail implements OnInit, OnDestroy {
     private artistData: ArtistAreaService,
     private auth: AuthService,
     private pagamentos: PaymentService,
+    private artistReviews: ArtistReviewService,
     private cdr: ChangeDetectorRef,
   ) {}
 
@@ -966,6 +895,9 @@ export class OrderDetail implements OnInit, OnDestroy {
 
       if (encontrado && pertenceAoUsuario) {
         this.pedido = { ...encontrado };
+        if (encontrado.cliente.username.toLowerCase() === usuario.nomeUsuario.toLowerCase() && !this.reviewTarget) {
+          void this.atualizarElegibilidadeAvaliacao(encontrado.id);
+        }
         if (this.ehCompraDireta && this.podePagar) {
           this.checkoutAtivo = true;
         }
@@ -1146,6 +1078,10 @@ export class OrderDetail implements OnInit, OnDestroy {
           ? 'Pagamento aprovado! Compra concluída com sucesso.'
           : resultado.simulationDetails ||
             'Pagamento simulado aprovado! O valor fica retido até você aprovar a entrega da comissão.';
+        if (compraDireta) {
+          await this.atualizarElegibilidadeAvaliacao(pedidoId);
+          if (this.reviewTarget) this.abrirModalAvaliacao();
+        }
       } else {
         this.checkoutAtivo = false;
         this.pagamentoErro = true;
@@ -1359,12 +1295,8 @@ export class OrderDetail implements OnInit, OnDestroy {
         this.pedido = { ...comissao, status: 'Finalizada', pagamentoLiberado: true };
       }
       this.statusMensagem = `Comissão finalizada! Pagamento liberado para o artista.`;
-      this.modalAvaliacaoAberto = true;
-      this.avaliacaoEnviada = false;
-      this.notaAvaliacao = 0;
-      this.notaEmDestaque = 0;
-      this.comentarioAvaliacao = '';
-      this.erroAvaliacao = '';
+      await this.atualizarElegibilidadeAvaliacao(this.pedido.id);
+      if (this.reviewTarget) this.abrirModalAvaliacao();
     } catch {
       this.statusMensagem = 'Ocorreu um erro ao aprovar a entrega.';
       this.statusErro = true;
@@ -1374,39 +1306,22 @@ export class OrderDetail implements OnInit, OnDestroy {
     }
   }
 
-  selecionarNota(nota: number): void {
-    this.notaAvaliacao = nota;
-    this.notaEmDestaque = 0;
-  }
-
-  fecharModalAvaliacao(): void {
-    if (this.enviandoAvaliacao) return;
-    this.modalAvaliacaoAberto = false;
-    this.notaEmDestaque = 0;
-  }
-
-  async enviarAvaliacao(): Promise<void> {
-    if (!this.pedido || !this.ehClienteDoPedido || !this.notaAvaliacao || this.enviandoAvaliacao) return;
-
-    this.enviandoAvaliacao = true;
-    this.erroAvaliacao = '';
+  private async atualizarElegibilidadeAvaliacao(idPedido: number): Promise<void> {
     try {
-      const salva = await this.artistData.registrarAvaliacaoDoPedido(
-        this.pedido.id,
-        this.notaAvaliacao,
-        this.comentarioAvaliacao,
-      );
-      if (!salva) {
-        this.erroAvaliacao = 'Não foi possível salvar sua avaliação. Confira sua conexão e tente novamente.';
-        return;
-      }
-      this.avaliacaoEnviada = true;
+      this.reviewTarget = await this.artistReviews.buscarElegibilidadeDoPedido(idPedido);
     } catch {
-      this.erroAvaliacao = 'Ocorreu um erro ao enviar sua avaliação. Tente novamente.';
+      this.reviewTarget = null;
     } finally {
-      this.enviandoAvaliacao = false;
       this.cdr.detectChanges();
     }
+  }
+
+  abrirModalAvaliacao(): void {
+    if (this.reviewTarget) this.modalAvaliacaoAberto = true;
+  }
+
+  avaliacaoConcluida(): void {
+    this.reviewTarget = null;
   }
 
   async recusarEntrega(): Promise<void> {

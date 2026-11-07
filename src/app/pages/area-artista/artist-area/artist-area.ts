@@ -179,6 +179,7 @@ export class ArtistArea implements OnInit, OnDestroy {
     }
     return Number(this.perfil?.avaliacaoMedia ?? 0);
   }
+  get totalAvaliacoes(): number { return this.avaliacoes.length || Number(this.perfil?.totalReviews ?? 0); }
   get atividades(): Comissao[] { return [...this.comissoes].sort((a, b) => b.criadaEm.localeCompare(a.criadaEm)).slice(0, 5); }
   get dashboardData() { return criarDadosDashboard(this.comissoes); }
 

@@ -4,7 +4,13 @@
       <span class="status-indicator" [class.aberto]="comissoesAbertas"></span>
       <div><strong class="status-title">{{ comissoesAbertas ? 'Comissões Abertas' : 'Comissões Temporariamente Fechadas' }}</strong><p class="status-sub">{{ comissoesAbertas ? 'Vagas disponíveis para produção personalizada.' : 'A artista não está aceitando novos pedidos.' }}</p></div>
     </div>
-    <div class="artist-avaliacao-badge"><span class="star">★</span><strong>{{ perfil?.avaliacaoMedia || 4.8 }}</strong><span class="reviews-count">({{ perfil?.totalReviews || 15 }} avaliações)</span></div>
+    <div class="artist-avaliacao-badge">
+      @if (perfil?.totalReviews) {
+        <span class="star">★</span><strong>{{ perfil?.avaliacaoMedia | number:'1.1-1' }}</strong><span class="reviews-count">({{ perfil?.totalReviews }} avaliações)</span>
+      } @else {
+        <strong>Sem avaliações</strong>
+      }
+    </div>
   </header>
 
   <section class="pacotes-section">

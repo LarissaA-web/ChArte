@@ -43,7 +43,7 @@
 
   <div class="metric-grid">
     <article class="metric-card"><span class="metric-icon">✦</span><span class="metric-label">Fluxo ativo</span><strong>{{ metricas.pendentes + metricas.andamento }}</strong><small>{{ metricas.pendentes }} aguardando · {{ metricas.andamento }} em produção/entrega</small></article>
-    <article class="metric-card"><span class="metric-icon star-icon">★</span><span class="metric-label">Avaliação média</span><strong>{{ avaliacao | number:'1.1-1' }}</strong><small>{{ totalObras }} obras no portfólio</small></article>
+    <article class="metric-card"><span class="metric-icon star-icon">★</span><span class="metric-label">Avaliação média</span><strong>{{ totalAvaliacoes ? (avaliacao | number:'1.1-1') : 'Sem avaliações' }}</strong><small>{{ totalAvaliacoes }} avaliações · {{ totalObras }} obras no portfólio</small></article>
   </div>
 
   <div class="charts-grid">

@@ -12,6 +12,7 @@ import {
 } from '../app/models/artist-area';
 import { supabase } from '../app/core/supabase/supabase.client';
 import { CommissionDeliveryService } from './commission-delivery.service';
+import { ArtistReviewService } from './artist-review.service';
 import { map, catchError, tap, switchMap } from 'rxjs/operators';
 
 const PRIVACIDADE_PADRAO: PrivacidadeArtista = {
@@ -55,7 +56,11 @@ export class ArtistAreaService {
   private readonly STATUS_STORAGE_KEY = 'charte_status_comissao_v1';
   private readonly ENTREGAS_STORAGE_KEY = 'charte_entregas_comissao_v1';
 
-  constructor(private readonly commissionDelivery: CommissionDeliveryService) {
+  constructor(
+    private readonly commissionDelivery: CommissionDeliveryService,
+    private readonly artistReviews: ArtistReviewService,
+  ) {
+    this.artistReviews.avaliacaoCriada$.subscribe(() => void this.carregarAvaliacoes());
     this.carregarTudo();
   }
 
@@ -837,37 +842,6 @@ export class ArtistAreaService {
       );
     }
     return ok;
-  }
-
-  async registrarAvaliacaoDoPedido(idPedido: number, nota: number, comentario = ''): Promise<boolean> {
-    if (!Number.isInteger(nota) || nota < 1 || nota > 5) return false;
-
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) return false;
-
-    const [{ data: usuario, error: usuarioError }, { data: pedido, error: pedidoError }] = await Promise.all([
-      supabase.from('usuario').select('id_usuario').eq('id_auth', authData.user.id).maybeSingle(),
-      supabase.from('pedidos_principal').select('id_cliente, id_artista').eq('id_pedido', idPedido).maybeSingle(),
-    ]);
-
-    if (usuarioError || pedidoError || !usuario || !pedido || Number(pedido.id_cliente) !== Number(usuario.id_usuario)) {
-      return false;
-    }
-
-    const { error } = await supabase.from('review').insert({
-      id_artista: pedido.id_artista,
-      id_cliente: usuario.id_usuario,
-      nota,
-      comentario: comentario.trim() || null,
-    });
-
-    if (error) {
-      console.error('Erro ao registrar avaliação da comissão:', error);
-      return false;
-    }
-
-    await this.carregarAvaliacoes();
-    return true;
   }
 
   async recusarEntregaCliente(id: number): Promise<boolean> {
