@@ -1,27 +1,37 @@
 package br.com.charte.backend.payment;
 
 import br.com.charte.backend.common.MinimumAge;
+import br.com.charte.backend.common.RequestCorrelationFilter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.sql.SQLException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 @Service
 public class PaymentService {
     private static final BigDecimal PLATFORM_FEE_RATE = new BigDecimal("0.08");
     private static final int MONEY_SCALE = 2;
     private static final ConcurrentHashMap<Long, ReentrantLock> CHECKOUT_LOCKS = new ConcurrentHashMap<>();
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
     private final JdbcTemplate jdbcTemplate;
     private final PaymentProvider paymentProvider;
@@ -107,18 +117,27 @@ public class PaymentService {
 
     @Transactional
     public PaymentView checkout(CheckoutRequest request, String authId) {
+        log.info("event=payment_checkout request_id={} stage=start jdbc_template={} database_mode={} provider={}",
+                requestId(), jdbcTemplate.getClass().getName(), jdbcMode(), paymentProvider.getClass().getSimpleName());
+        log.info("event=payment_checkout request_id={} stage=transaction outcome=active value={}",
+                requestId(), TransactionSynchronizationManager.isActualTransactionActive());
+        registerCheckoutTransactionLogging();
         if (request == null || request.orderId() == null) {
+            log.info("event=payment_checkout request_id={} stage=request_validation outcome=invalid", requestId());
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "orderId é obrigatório");
         }
+        log.info("event=payment_checkout request_id={} stage=request_validation outcome=success", requestId());
         Long userId = findUserIdByAuthId(authId);
         OrderRow order = findOrderForClientOrThrow(request.orderId(), userId);
 
         ReentrantLock checkoutLock = CHECKOUT_LOCKS.computeIfAbsent(order.idPedido(), ignored -> new ReentrantLock());
         checkoutLock.lock();
+        log.info("event=payment_checkout request_id={} stage=checkout_lock outcome=acquired", requestId());
         try {
             return checkoutLocked(request, order);
         } finally {
             checkoutLock.unlock();
+            log.info("event=payment_checkout request_id={} stage=checkout_lock outcome=released", requestId());
         }
     }
 
@@ -134,6 +153,7 @@ public class PaymentService {
         }
 
         if (hasApprovedPayment(order.idPedido())) {
+            log.info("event=payment_checkout request_id={} stage=approved_payment_check outcome=already_paid", requestId());
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Este pedido já foi pago anteriormente");
         }
 
@@ -148,13 +168,18 @@ public class PaymentService {
         if (pending != null) {
             if (!pending.method().equalsIgnoreCase(method.dbValue()) && !pending.method().equalsIgnoreCase(method.name())) {
                 updatePaymentMethod(pending.paymentId(), method);
+                log.info("event=payment_checkout request_id={} stage=completion outcome=pending_payment_method_updated", requestId());
                 return enrichWithOrderDetails(findByPaymentIdInternal(pending.paymentId()), order);
             }
+            log.info("event=payment_checkout request_id={} stage=completion outcome=pending_payment_reused", requestId());
             return enrichWithOrderDetails(pending, order);
         }
 
+        log.info("event=payment_checkout request_id={} stage=mock_provider outcome=start", requestId());
         PaymentProvider.CheckoutResult created = paymentProvider.createCheckout(order.idPedido(), order.valorTotal(), method);
+        log.info("event=payment_checkout request_id={} stage=mock_provider outcome=success", requestId());
         insertPaymentRecord(order, method, created);
+        log.info("event=payment_checkout request_id={} stage=completion outcome=created", requestId());
 
         return enrichWithOrderDetails(
                 new PaymentView(
@@ -472,7 +497,7 @@ public class PaymentService {
                     VALUES (?, ?, ?, ?, 'Boleto', 'Pendente', ?, ?, ?)
                     """;
         };
-        int insertedRows = jdbcTemplate.update(
+        int insertedRows = runDatabaseStage("payment_insert", () -> jdbcTemplate.update(
                 sql,
                 order.idPedido(),
                 order.idCliente(),
@@ -481,8 +506,9 @@ public class PaymentService {
                 created.paymentId(),
                 created.checkoutUrl(),
                 created.status().canonicalName()
-        );
+        ));
         if (insertedRows != 1) {
+            log.error("event=checkout_db request_id={} stage=payment_insert outcome=unexpected_row_count", requestId());
             throw new DataAccessResourceFailureException("O Supabase não confirmou a gravação do pagamento.");
         }
     }
@@ -493,7 +519,11 @@ public class PaymentService {
             case CARTAO -> "UPDATE public.pagamentos SET metodo = 'Cartão de Crédito' WHERE gateway_payment_id = ?";
             case TRANSFERENCIA -> "UPDATE public.pagamentos SET metodo = 'Boleto' WHERE gateway_payment_id = ?";
         };
-        requireSingleUpdatedRow(jdbcTemplate.update(sql, paymentId), "atualização do método de pagamento");
+        int updatedRows = runDatabaseStage("pending_payment_method_update", () -> jdbcTemplate.update(sql, paymentId));
+        if (updatedRows != 1) {
+            log.error("event=checkout_db request_id={} stage=pending_payment_method_update outcome=unexpected_row_count", requestId());
+            throw new DataAccessResourceFailureException("O Supabase não confirmou a atualização do método de pagamento.");
+        }
     }
 
     private void updatePaymentStatusInDb(String paymentId, PaymentStatus status) {
@@ -653,7 +683,7 @@ public class PaymentService {
     }
 
     private boolean hasApprovedPayment(Long orderId) {
-        Integer count = jdbcTemplate.queryForObject(
+        Integer count = runDatabaseStage("approved_payment_check", () -> jdbcTemplate.queryForObject(
                 """
                 SELECT COUNT(*)
                 FROM public.pagamentos
@@ -663,7 +693,7 @@ public class PaymentService {
                 """,
                 Integer.class,
                 orderId
-        );
+        ));
         return count != null && count > 0;
     }
 
@@ -687,7 +717,7 @@ public class PaymentService {
     private PaymentView findLatestPendingByOrder(Long orderId) {
         try {
             OrderRow order = findOrderByIdOrThrow(orderId);
-            return jdbcTemplate.queryForObject(
+            return runDatabaseStage("latest_pending_payment_lookup", () -> jdbcTemplate.queryForObject(
                     """
                     SELECT p.gateway_payment_id, p.id_pedido, p.valor, CAST(p.metodo AS VARCHAR) AS metodo,
                            p.gateway_status, CAST(p.status_pagamento AS VARCHAR) AS status_pagamento,
@@ -702,7 +732,7 @@ public class PaymentService {
                     """,
                     (rs, rowNum) -> enrichWithOrderDetails(mapRowToPaymentView(rs, order.valorTotal()), order),
                     orderId
-            );
+            ));
         } catch (EmptyResultDataAccessException ex) {
             return null;
         }
@@ -710,7 +740,7 @@ public class PaymentService {
 
     private PaymentView findByPaymentIdInternal(String paymentId) {
         try {
-            return jdbcTemplate.queryForObject(
+            return runDatabaseStage("payment_id_lookup", () -> jdbcTemplate.queryForObject(
                     """
                     SELECT p.gateway_payment_id, p.id_pedido, p.valor, CAST(p.metodo AS VARCHAR) AS metodo,
                            p.gateway_status, CAST(p.status_pagamento AS VARCHAR) AS status_pagamento,
@@ -722,7 +752,7 @@ public class PaymentService {
                     """,
                     (rs, rowNum) -> mapRowToPaymentView(rs, rs.getBigDecimal("pedido_valor")),
                     paymentId
-            );
+            ));
         } catch (EmptyResultDataAccessException ex) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Pagamento não encontrado");
         }
@@ -836,17 +866,75 @@ public class PaymentService {
         };
     }
 
+    private <T> T runDatabaseStage(String stage, Supplier<T> operation) {
+        log.info("event=checkout_db request_id={} stage={} outcome=start", requestId(), stage);
+        try {
+            T result = operation.get();
+            log.info("event=checkout_db request_id={} stage={} outcome=success", requestId(), stage);
+            return result;
+        } catch (EmptyResultDataAccessException ex) {
+            log.info("event=checkout_db request_id={} stage={} outcome=no_rows", requestId(), stage);
+            throw ex;
+        } catch (DataAccessException ex) {
+            SQLException sqlException = findSqlException(ex);
+            log.error("event=checkout_db request_id={} stage={} outcome=failure exception_type={} sql_state={} vendor_code={}",
+                    requestId(), stage, ex.getClass().getName(),
+                    sqlException != null ? sqlException.getSQLState() : "unavailable",
+                    sqlException != null ? sqlException.getErrorCode() : "unavailable");
+            throw ex;
+        }
+    }
+
+    private static SQLException findSqlException(Throwable exception) {
+        for (Throwable current = exception; current != null; current = current.getCause()) {
+            if (current instanceof SQLException sqlException) {
+                return sqlException;
+            }
+        }
+        return null;
+    }
+
+    private String jdbcMode() {
+        if (jdbcTemplate instanceof br.com.charte.backend.common.SupabasePostgrestJdbcTemplate supabaseJdbc) {
+            return supabaseJdbc.isJdbcConfigured() ? "jdbc" : "postgrest";
+        }
+        return "jdbc";
+    }
+
+    private static String requestId() {
+        String requestId = MDC.get(RequestCorrelationFilter.MDC_KEY);
+        return requestId != null ? requestId : "unavailable";
+    }
+
+    private void registerCheckoutTransactionLogging() {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            log.warn("event=payment_checkout request_id={} stage=transaction outcome=synchronization_unavailable", requestId());
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                String outcome = switch (status) {
+                    case STATUS_COMMITTED -> "committed";
+                    case STATUS_ROLLED_BACK -> "rolled_back";
+                    default -> "unknown";
+                };
+                log.info("event=payment_checkout request_id={} stage=transaction outcome={}", requestId(), outcome);
+            }
+        });
+    }
+
     private Long findUserIdByAuthId(String authId) {
         if (authId == null || authId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token sem subject");
         }
         try {
-            return jdbcTemplate.queryForObject(
+            return runDatabaseStage("authenticated_user_lookup", () -> jdbcTemplate.queryForObject(
                     "SELECT id_usuario FROM public.usuario WHERE CAST(id_auth AS VARCHAR) = ? AND status_conta = 'Ativo' AND data_nascimento <= ?",
                     Long.class,
                     authId,
                     MinimumAge.latestEligibleBirthDate()
-            );
+            ));
         } catch (EmptyResultDataAccessException ex) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não vinculado");
         }
@@ -854,7 +942,7 @@ public class PaymentService {
 
     private OrderRow findOrderByIdOrThrow(Long orderId) {
         try {
-            return jdbcTemplate.queryForObject(
+            return runDatabaseStage("order_lookup", () -> jdbcTemplate.queryForObject(
                     """
                     SELECT ped.id_pedido, ped.id_cliente, ped.id_artista, a.id_usuario AS id_usuario_artista,
                            COALESCE(ped.proposta_valor, ped.valor_total) AS valor_efetivo,
@@ -882,7 +970,7 @@ public class PaymentService {
                             rs.getString("nome_artista")
                     ),
                     orderId
-            );
+            ));
         } catch (EmptyResultDataAccessException ex) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido não encontrado");
         }

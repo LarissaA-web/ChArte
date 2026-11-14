@@ -1,10 +1,16 @@
 package br.com.charte.backend.payment;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import br.com.charte.backend.common.RequestCorrelationFilter;
 import br.com.charte.backend.testsupport.InMemoryCharteJdbcTemplate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -12,6 +18,8 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.web.server.ResponseStatusException;
 
 class PaymentServiceSafetyTest {
@@ -49,6 +57,38 @@ class PaymentServiceSafetyTest {
         assertEquals(2L, jdbcTemplate.latestPayment().idArtista);
         assertEquals(new BigDecimal("150.00"), jdbcTemplate.latestPayment().valor);
         assertEquals(new BigDecimal("150.00"), first.amount());
+    }
+
+    @Test
+    void registraEtapasDeCheckoutComCorrelacaoSemRegistrarIdentidadeOuParametros() {
+        Logger logger = (Logger) LoggerFactory.getLogger(PaymentService.class);
+        Level previousLevel = logger.getLevel();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.setLevel(Level.INFO);
+        logger.addAppender(appender);
+        MDC.put(RequestCorrelationFilter.MDC_KEY, "checkout-test-id");
+
+        try {
+            service.checkout(new PaymentService.CheckoutRequest(100L, "PIX"), "auth_u1");
+
+            String events = appender.list.stream().map(ILoggingEvent::getFormattedMessage)
+                    .reduce("", (all, event) -> all + "\n" + event);
+            assertTrue(events.contains("request_id=checkout-test-id"));
+            assertTrue(events.contains("stage=authenticated_user_lookup outcome=start"));
+            assertTrue(events.contains("stage=order_lookup outcome=success"));
+            assertTrue(events.contains("stage=approved_payment_check outcome=success"));
+            assertTrue(events.contains("stage=latest_pending_payment_lookup outcome=no_rows"));
+            assertTrue(events.contains("stage=payment_insert outcome=success"));
+            assertTrue(events.contains("stage=completion outcome=created"));
+            assertFalse(events.contains("auth_u1"));
+            assertFalse(events.contains("Cliente Um"));
+        } finally {
+            MDC.remove(RequestCorrelationFilter.MDC_KEY);
+            logger.detachAppender(appender);
+            logger.setLevel(previousLevel);
+            appender.stop();
+        }
     }
 
     @Test

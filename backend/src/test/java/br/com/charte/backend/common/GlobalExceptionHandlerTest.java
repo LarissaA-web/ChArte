@@ -9,6 +9,7 @@ import ch.qos.logback.core.read.ListAppender;
 import java.sql.SQLException;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpStatus;
 
@@ -24,6 +25,7 @@ class GlobalExceptionHandlerTest {
         SQLException sqlCause = new SQLException("server detail containing " + secretMarker, "42703", 0);
         DataAccessResourceFailureException exception = new DataAccessResourceFailureException(
                 "wrapper detail containing " + secretMarker, sqlCause);
+        MDC.put(RequestCorrelationFilter.MDC_KEY, "correlation-test-id");
 
         try {
             var response = new GlobalExceptionHandler().handleDataAccessException(exception);
@@ -35,7 +37,9 @@ class GlobalExceptionHandlerTest {
             assertFalse(appender.list.stream().anyMatch(event -> event.getFormattedMessage().contains(secretMarker)));
             assertTrue(response.getStatusCode().isSameCodeAs(HttpStatus.SERVICE_UNAVAILABLE));
             assertTrue(response.getBody().get("message").equals("Serviço de banco de dados temporariamente indisponível"));
+            assertTrue(response.getBody().get("requestId").equals("correlation-test-id"));
         } finally {
+            MDC.remove(RequestCorrelationFilter.MDC_KEY);
             logger.detachAppender(appender);
             appender.stop();
         }
