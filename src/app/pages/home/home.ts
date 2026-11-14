@@ -92,6 +92,10 @@ export class Home {
     return this.eventosDestaque[this.indiceEventoAtivo] ?? this.eventosDestaque[0];
   }
 
+  abrirInstagram(): void {
+    window.location.href = 'https://www.instagram.com/charte_comms?psln=MWlibTNhdDR1YXdscQ==';
+  }
+
   selecionarEvento(indice: number): void {
     this.indiceEventoAtivo = indice;
     this.cdr.detectChanges();

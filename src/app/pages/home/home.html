@@ -1,6 +1,14 @@
 <app-search-bar></app-search-bar>
 
-<section class="event-banner-container" aria-label="Anúncio de eventos ChArte">
+<section
+  class="event-banner-container"
+  aria-label="Abrir perfil do ChArte no Instagram"
+  role="link"
+  tabindex="0"
+  (click)="abrirInstagram()"
+  (keydown.enter)="abrirInstagram()"
+  (keydown.space)="$event.preventDefault(); abrirInstagram()"
+>
   <div class="event-banner-card">
     <img
       class="event-banner-image"
@@ -22,7 +30,7 @@
         <button
           type="button"
           class="event-banner-cta"
-          (click)="explorarEvento(eventoAtivo.filtro)"
+          (click)="$event.stopPropagation(); explorarEvento(eventoAtivo.filtro)"
         >
           {{ eventoAtivo.acao }} →
         </button>
@@ -37,7 +45,7 @@
           [class.active]="indiceEventoAtivo === i"
           [attr.aria-label]="'Evento: ' + evento.titulo"
           [attr.aria-selected]="indiceEventoAtivo === i"
-          (click)="selecionarEvento(i)"
+          (click)="$event.stopPropagation(); selecionarEvento(i)"
         ></button>
       }
     </div>

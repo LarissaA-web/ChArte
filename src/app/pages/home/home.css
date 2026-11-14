@@ -1,4 +1,5 @@
 .event-banner-container {
+  cursor: pointer;
   width: calc(100% - 30px);
   max-width: calc(100% - 30px);
   margin: 15px;
