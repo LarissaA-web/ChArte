@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.charte.backend.testsupport.InMemoryCharteJdbcTemplate;
+import br.com.charte.backend.common.SupabasePostgrestJdbcTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -13,6 +15,8 @@ import java.util.concurrent.Executors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
+import static org.mockito.Mockito.mock;
+import javax.sql.DataSource;
 
 class PaymentServiceSafetyTest {
     private InMemoryCharteJdbcTemplate jdbcTemplate;
@@ -173,6 +177,20 @@ class PaymentServiceSafetyTest {
                         "auth_u1")
         );
         assertEquals(0, jdbcTemplate.countRetentionMovements());
+    }
+
+    @Test
+    void postgrestNaoIniciaSimulacaoQuePoderiaAprovarSemTransacaoJDBC() {
+        PaymentService postgrestService = new PaymentService(
+                new SupabasePostgrestJdbcTemplate(mock(DataSource.class), "", "", false, new ObjectMapper()),
+                new MockPaymentProvider("http://localhost:4200/checkout"),
+                "segredo-dev");
+
+        assertThrows(
+                org.springframework.dao.DataAccessResourceFailureException.class,
+                () -> postgrestService.processSimulatedPayment(
+                        "pay_test", new PaymentService.ProcessPaymentRequest("PIX", null, null, null, 1, null, "APPROVED"),
+                        "auth_u1"));
     }
 
     @Test

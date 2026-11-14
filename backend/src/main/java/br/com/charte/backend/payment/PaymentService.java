@@ -179,6 +179,7 @@ public class PaymentService {
 
     @Transactional
     public PaymentView processSimulatedPayment(String paymentId, ProcessPaymentRequest request, String authId) {
+        requireJdbcForFinancialCapture();
         Long userId = findUserIdByAuthId(authId);
         PaymentView current = findByPaymentIdInternal(paymentId);
         OrderRow order = findOrderForClientOrThrow(current.orderId(), userId);
@@ -441,6 +442,10 @@ public class PaymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
         }
 
+        if (status.isApproved()) {
+            requireJdbcForFinancialCapture();
+        }
+
         if (status.isApproved() && hasApprovedPaymentOtherThan(order.idPedido(), paymentId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Este pedido já possui um pagamento aprovado");
         }
@@ -565,7 +570,7 @@ public class PaymentService {
         if (jdbcTemplate instanceof br.com.charte.backend.common.SupabasePostgrestJdbcTemplate supabaseJdbc
                 && !supabaseJdbc.isJdbcConfigured()) {
             throw new DataAccessResourceFailureException(
-                    "A aprovação financeira exige JDBC transacional; PostgREST não pode registrar retenção com segurança."
+                    "O processamento financeiro exige PostgreSQL via JDBC com transação confirmada; PostgREST não oferece confirmação transacional para esta operação."
             );
         }
     }

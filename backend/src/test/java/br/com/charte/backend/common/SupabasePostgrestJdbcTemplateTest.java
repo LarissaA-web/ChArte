@@ -37,6 +37,18 @@ class SupabasePostgrestJdbcTemplateTest {
     }
 
     @Test
+    void postgrestNeverReportsUnsupportedSqlWriteAsSuccessful() {
+        SupabasePostgrestJdbcTemplate template = new SupabasePostgrestJdbcTemplate(
+                mock(DataSource.class), "https://supabase.invalid", "test-key", false, new ObjectMapper());
+
+        DataAccessResourceFailureException error = assertThrows(
+                DataAccessResourceFailureException.class,
+                () -> template.update("INSERT INTO public.movimentacoes_financeiras (id_pagamento) VALUES (?)", 1L));
+
+        assertTrue(error.getMessage().contains("não suportado pelo adaptador PostgREST"));
+    }
+
+    @Test
     void postgrestResolveContaAtivaPeloSubjectDoJwt() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         AtomicReference<String> requestUri = new AtomicReference<>();

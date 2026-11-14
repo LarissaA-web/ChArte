@@ -159,9 +159,9 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
                 throw jdbcUnavailable("gravação", ex);
             }
         }
-        long id = localIdGenerator.incrementAndGet();
-        generatedKeyHolder.getKeyList().add(Map.of("id_conversa", id, "id_mensagem", id));
-        return 1;
+        throw new DataAccessResourceFailureException(
+                "SQL de escrita não suportado pelo adaptador PostgREST; nenhuma gravação foi confirmada."
+        );
     }
 
     private DataAccessResourceFailureException jdbcUnavailable(String operation, Throwable cause) {
@@ -564,7 +564,9 @@ public class SupabasePostgrestJdbcTemplate extends JdbcTemplate {
             return 1;
         }
 
-        return 1;
+        throw new DataAccessResourceFailureException(
+                "SQL de escrita não suportado pelo adaptador PostgREST; nenhuma gravação foi confirmada."
+        );
     }
 
     private List<Map<String, Object>> fetchFollowerProfiles(List<Long> userIds) {

@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+**/.env
+**/.env.*
+*.crt
+*.cer
+**/*.crt
+**/*.cer
+**/target
+**/node_modules
+**/dist
+charte-auditoria.zip
