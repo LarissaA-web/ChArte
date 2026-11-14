@@ -1,0 +1,30 @@
+[33m> cfdc316[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Adiciona logs de diagnostico para erros JDBC
+[33m> cead4ac[m Configura Docker e corrige persistencia de pagamentos
+[33m> 5316455[m imagens
+[33m> 57dbe02[m revert: restaura versao funcional 20b4d2d
+[33m> 4ffbaf2[m[33m ([m[1;32mbackup-antes-rollback[m[33m)[m fix: corrige conflitos e pagamentos do frontend
+[33m> 2945969[m feat: integra pagamentos mock e dashboard do artista
+[33m< 2b75610[m[33m ([m[1;31morigin/backend[m[33m, [m[1;32mbackend[m[33m)[m fix: corrige persistencia de pagamentos e integracao JDBC
+[33m> 3c6ac30[m ajustes de avaliação - bugs.2
+[33m> 6b2e8fc[m ajustes de avaliação - bugs
+[33m> 7121721[m ajustes de avaliação
+[33m> 20b4d2d[m[33m ([m[1;32mrestauracao-20b4d2d[m[33m)[m add alert redefinir senha
+[33m> b3ca316[m correção de bugs 6
+[33m> 28f3405[m Corrige recuperacao de senha no ChArte
+[33m< 31e9c62[m Integra categorias e estilos e corrige recuperacao de senha
+[33m< 582ddd5[m Adiciona configuracao do Vercel
+[33m> b0ec244[m Corrige rota da API para o Render
+[33m> 3afb212[m correção 5
+[33m> e1537ea[m correção de bugs - 4
+[33m> fd86c26[m correção de bugs - 3
+[33m> 496b921[m esqueci senha
+[33m> a20cb15[m Merge pagamento-atualizado na main
+[33m> 8f9f650[m[33m ([m[1;31morigin/pagamento-atualizado[m[33m, [m[1;32mpagamento-atualizado[m[33m)[m Atualização do ChArte
+[33m> f7501f5[m Atualizaçoã de métodos de pagamento
+[33m< a7bde05[m deploy: enviando jar compilado diretamente
+[33m< c6b8b98[m renomeio
+[33m< 7bb8cf2[m add dockerfile para Java 25
+[33m> 018952a[m Atualização ChArte - correções e novas funcionalidades
+[33m> bee2fe3[m Melhoria do dashboard
+[33m> de6e34b[m 05/11
+[33m> 01966a3[m Update .env.example

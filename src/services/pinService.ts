@@ -348,7 +348,7 @@ export class PinService {
     const artistasPorId = new Map((artistas ?? []).map((a: any) => [a.id_artista, a]));
     const usuariosPorId = new Map((usuarios ?? []).map((u: any) => [u.id_usuario, u]));
 
-    this.artesCache = artesBanco.map((item: any): Post => {
+    const artesDoBanco = artesBanco.map((item: any): Post => {
       const artista: any = artistasPorId.get(item.id_artista);
       const usuario: any = artista ? usuariosPorId.get(artista.id_usuario) : undefined;
 
@@ -375,6 +375,7 @@ export class PinService {
         },
       };
     });
+    this.artesCache = artesDoBanco;
 
     this.carregado = true;
     console.log('ARTES CONVERTIDAS PARA POST:', this.artesCache);
@@ -383,6 +384,10 @@ export class PinService {
   private obterUrlImagem(imagem: string | null): string {
     if (!imagem) {
       return '/gato.jpeg';
+    }
+
+    if (imagem.startsWith('/')) {
+      return imagem;
     }
 
     if (
